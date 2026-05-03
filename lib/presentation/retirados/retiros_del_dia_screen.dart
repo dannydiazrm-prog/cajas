@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 
-class RetirosDiаScreen extends StatelessWidget {
-  const RetirosDiаScreen({super.key});
+class RetirosDiaScreen extends StatelessWidget {
+  const RetirosDiaScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -11,13 +11,13 @@ class RetirosDiаScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        title: const Text('RETIROS DEL DÍA'),
+        title: const Text('RETIROS DEL DIA'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/retirados'),
         ),
       ),
-      body: const Center(child: Text('Próximamente...')),
+      body: const Center(child: Text('Proximamente...')),
     );
   }
 }
