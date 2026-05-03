@@ -40,7 +40,7 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/retirados/del-dia',
-      builder: (context, state) => const RetirosDiаScreen(),
+      builder: (context, state) => const RetirosDiaScreen(),
     ),
     GoRoute(
       path: '/retirados/historial',
