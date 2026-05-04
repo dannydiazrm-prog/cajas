@@ -1,23 +1,750 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/breakpoints.dart';
 
-class AjusteInventarioScreen extends StatelessWidget {
+class AjusteInventarioScreen extends StatefulWidget {
   const AjusteInventarioScreen({super.key});
+
+  @override
+  State<AjusteInventarioScreen> createState() =>
+      _AjusteInventarioScreenState();
+}
+
+class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
+  final _nombreController = TextEditingController();
+  bool _etiquetas = false;
+  bool _prospectos = false;
+  bool _espanol = false;
+  bool _ingles = false;
+  List<QueryDocumentSnapshot> _resultados = [];
+  bool _buscando = false;
+  bool _buscado = false;
+  QueryDocumentSnapshot? _productoSeleccionado;
+
+  // Formulario
+  String? _tipoAjuste; // 'suma' o 'resta'
+  final _cantidadController = TextEditingController();
+  String? _motivo;
+  final _otroController = TextEditingController();
+  bool _guardando = false;
+  String _error = '';
+
+  final List<String> _motivosResta = [
+    'Producto dañado',
+    'Producto vencido/viejo',
+    'Pérdida',
+    'Error de conteo',
+    'Otro',
+  ];
+
+  final List<String> _motivosSuma = [
+    'Diferencia de conteo',
+    'Producto encontrado',
+    'Otro',
+  ];
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _cantidadController.dispose();
+    _otroController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _buscar() async {
+    setState(() {
+      _buscando = true;
+      _buscado = false;
+      _productoSeleccionado = null;
+    });
+
+    Query query = FirebaseFirestore.instance.collection('productos');
+
+    if (_etiquetas && !_prospectos) {
+      query = query.where('tipo', isEqualTo: 'Etiqueta');
+    } else if (_prospectos && !_etiquetas) {
+      query = query.where('tipo', isEqualTo: 'Prospecto');
+    }
+
+    if (_espanol && !_ingles) {
+      query = query.where('idioma', isEqualTo: 'ES');
+    } else if (_ingles && !_espanol) {
+      query = query.where('idioma', isEqualTo: 'EN');
+    }
+
+    final snapshot = await query.get();
+    List<QueryDocumentSnapshot> docs = snapshot.docs;
+
+    final nombre = _nombreController.text.trim().toLowerCase();
+    if (nombre.isNotEmpty) {
+      docs = docs.where((d) {
+        final data = d.data() as Map<String, dynamic>;
+        return (data['nombre'] ?? '')
+            .toString()
+            .toLowerCase()
+            .contains(nombre);
+      }).toList();
+    }
+
+    setState(() {
+      _resultados = docs;
+      _buscando = false;
+      _buscado = true;
+    });
+  }
+
+  Future<void> _confirmar() async {
+    final cantidad = int.tryParse(_cantidadController.text.trim());
+    if (cantidad == null || cantidad <= 0) {
+      setState(() => _error = 'Ingresá una cantidad válida');
+      return;
+    }
+    if (_tipoAjuste == null) {
+      setState(() => _error = 'Seleccioná si es suma o resta');
+      return;
+    }
+    if (_motivo == null) {
+      setState(() => _error = 'Seleccioná un motivo');
+      return;
+    }
+    if (_motivo == 'Otro' && _otroController.text.trim().isEmpty) {
+      setState(() => _error = 'Describí el motivo');
+      return;
+    }
+
+    final data = _productoSeleccionado!.data() as Map<String, dynamic>;
+    final stockActual = data['stockActual'] ?? 0;
+
+    if (_tipoAjuste == 'resta' && cantidad > stockActual) {
+      setState(
+          () => _error = 'No podés restar más del stock actual: $stockActual');
+      return;
+    }
+
+    setState(() {
+      _guardando = true;
+      _error = '';
+    });
+
+    try {
+      final motivoFinal =
+          _motivo == 'Otro' ? _otroController.text.trim() : _motivo!;
+      final nuevoStock = _tipoAjuste == 'suma'
+          ? stockActual + cantidad
+          : stockActual - cantidad;
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      batch.update(
+        FirebaseFirestore.instance
+            .collection('productos')
+            .doc(_productoSeleccionado!.id),
+        {'stockActual': nuevoStock},
+      );
+
+      batch.set(
+        FirebaseFirestore.instance.collection('ajustes').doc(),
+        {
+          'tipo': 'ajuste_inventario',
+          'tipoAjuste': _tipoAjuste,
+          'productoId': _productoSeleccionado!.id,
+          'productoNombre': data['nombre'],
+          'tipoProducto': data['tipo'],
+          'idioma': data['idioma'],
+          'stockAnterior': stockActual,
+          'cantidad': cantidad,
+          'stockNuevo': nuevoStock,
+          'motivo': motivoFinal,
+          'fecha': FieldValue.serverTimestamp(),
+        },
+      );
+
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ajuste registrado correctamente'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+        context.go('/ajustes');
+      }
+    } catch (e) {
+      setState(() => _error = 'Error al guardar. Intentá de nuevo.');
+    }
+
+    setState(() => _guardando = false);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: const Text('AJUSTE DE INVENTARIO'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/ajustes'),
+      body: Column(
+        children: [
+          _buildHeader(context),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: _productoSeleccionado == null
+                    ? _buildBusqueda()
+                    : _buildFormulario(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBusqueda() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'SELECCIONÁ EL PRODUCTO',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.1,
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _nombreController,
+          decoration: InputDecoration(
+            hintText: 'Buscar por nombre...',
+            prefixIcon:
+                const Icon(Icons.search, color: AppColors.primary),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                  color: AppColors.primary, width: 2),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildChip('Etiquetas', _etiquetas,
+                (v) => setState(() => _etiquetas = v)),
+            _buildChip('Prospectos', _prospectos,
+                (v) => setState(() => _prospectos = v)),
+            _buildChip('Español', _espanol,
+                (v) => setState(() => _espanol = v)),
+            _buildChip('Inglés', _ingles,
+                (v) => setState(() => _ingles = v)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: _buscando ? null : _buscar,
+            icon: const Icon(Icons.search),
+            label: const Text(
+              'BUSCAR',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (_buscando)
+          const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+        if (_buscado && _resultados.isEmpty)
+          const Center(
+            child: Text(
+              'No se encontraron productos',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ..._resultados.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final stock = data['stockActual'] ?? 0;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => setState(() {
+                _productoSeleccionado = doc;
+                _tipoAjuste = null;
+                _motivo = null;
+                _cantidadController.clear();
+                _otroController.clear();
+                _error = '';
+              }),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.primary.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['nombre'] ?? '',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              _buildTag(data['tipo'] ?? ''),
+                              const SizedBox(width: 8),
+                              _buildTag(data['idioma'] ?? ''),
+                              const SizedBox(width: 8),
+                              _buildTag(
+                                'Stock: $stock',
+                                color: stock < 1000
+                                    ? Colors.orange
+                                    : AppColors.primary,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_forward_ios,
+                      color: AppColors.primary,
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildFormulario() {
+    final data = _productoSeleccionado!.data() as Map<String, dynamic>;
+    final stock = data['stockActual'] ?? 0;
+    final motivos =
+        _tipoAjuste == 'suma' ? _motivosSuma : _motivosResta;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Producto seleccionado
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'PRODUCTO SELECCIONADO',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      data['nombre'] ?? '',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        _buildTagBlanco(data['tipo'] ?? ''),
+                        const SizedBox(width: 8),
+                        _buildTagBlanco(data['idioma'] ?? ''),
+                        const SizedBox(width: 8),
+                        _buildTagBlanco('Stock actual: $stock'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () =>
+                    setState(() => _productoSeleccionado = null),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Tipo de ajuste
+        const Text(
+          'TIPO DE AJUSTE',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.1,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() {
+                  _tipoAjuste = 'suma';
+                  _motivo = null;
+                }),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: _tipoAjuste == 'suma'
+                        ? Colors.green
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green, width: 2),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline,
+                        color: _tipoAjuste == 'suma'
+                            ? Colors.white
+                            : Colors.green,
+                        size: 28,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'SUMAR',
+                        style: TextStyle(
+                          color: _tipoAjuste == 'suma'
+                              ? Colors.white
+                              : Colors.green,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() {
+                  _tipoAjuste = 'resta';
+                  _motivo = null;
+                }),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: _tipoAjuste == 'resta'
+                        ? Colors.red
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red, width: 2),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.remove_circle_outline,
+                        color: _tipoAjuste == 'resta'
+                            ? Colors.white
+                            : Colors.red,
+                        size: 28,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'RESTAR',
+                        style: TextStyle(
+                          color: _tipoAjuste == 'resta'
+                              ? Colors.white
+                              : Colors.red,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        if (_tipoAjuste != null) ...[
+          // Cantidad
+          const Text(
+            'CANTIDAD',
+            style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _cantidadController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              hintText: 'Ej: 500',
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    const BorderSide(color: AppColors.primary),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                    color: AppColors.primary, width: 2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Motivo
+          const Text(
+            'MOTIVO',
+            style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: motivos.map((m) {
+              final seleccionado = _motivo == m;
+              return GestureDetector(
+                onTap: () => setState(() => _motivo = m),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: seleccionado
+                        ? AppColors.primary
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.primary),
+                  ),
+                  child: Text(
+                    m,
+                    style: TextStyle(
+                      color: seleccionado
+                          ? Colors.white
+                          : AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          if (_motivo == 'Otro') ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _otroController,
+              decoration: InputDecoration(
+                hintText: 'Describí el motivo...',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                      color: AppColors.primary, width: 2),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 32),
+
+          if (_error.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red),
+              ),
+              child: Text(
+                _error,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: _guardando ? null : _confirmar,
+              child: _guardando
+                  ? const CircularProgressIndicator(
+                      color: Colors.white)
+                  : const Text(
+                      'CONFIRMAR AJUSTE',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildChip(
+      String label, bool seleccionado, Function(bool) onTap) {
+    return GestureDetector(
+      onTap: () => onTap(!seleccionado),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: seleccionado ? AppColors.primary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.primary),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: seleccionado ? Colors.white : AppColors.primary,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
         ),
       ),
-      body: const Center(child: Text('Próximamente...')),
+    );
+  }
+
+  Widget _buildTag(String label, {Color? color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: (color ?? AppColors.primary).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color ?? AppColors.primary,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTagBlanco(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+    return Container(
+      color: AppColors.primary,
+      padding: EdgeInsets.only(
+        top: topPadding + 12,
+        bottom: 16,
+        left: 8,
+        right: 16,
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => context.go('/ajustes'),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'AJUSTE DE INVENTARIO',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: Breakpoints.isMobile(context) ? 18 : 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
