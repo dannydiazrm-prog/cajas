@@ -15,15 +15,15 @@ class _PendientesScreenState extends State<PendientesScreen> {
   bool _cerrando = false;
 
   bool _tienePendiente(Map<String, dynamic> data) {
-    final entregada = data['cantidadEntregada'] ?? 0;
-    final estimada = data['cantidadEstimada'] ?? 0;
+    final entregada = (data['cantidadEntregada'] ?? 0) as num;
+    final estimada = (data['cantidadEstimada'] ?? 0) as num;
     return entregada > estimada;
   }
 
   int _cantidadPendiente(Map<String, dynamic> data) {
-    final entregada = data['cantidadEntregada'] ?? 0;
-    final estimada = data['cantidadEstimada'] ?? 0;
-    return entregada - estimada;
+    final entregada = (data['cantidadEntregada'] ?? 0) as num;
+    final estimada = (data['cantidadEstimada'] ?? 0) as num;
+    return (entregada - estimada).toInt();
   }
 
   Future<void> _cerrarConDevolucion(QueryDocumentSnapshot doc) async {
@@ -100,8 +100,7 @@ class _PendientesScreenState extends State<PendientesScreen> {
               onPressed: () async {
                 final cantidad = int.tryParse(cantidadCtrl.text.trim());
                 if (cantidad == null || cantidad <= 0) {
-                  setStateDialog(
-                      () => error = 'Ingresá una cantidad válida');
+                  setStateDialog(() => error = 'Ingresá una cantidad válida');
                   return;
                 }
                 if (cantidad > pendiente) {
@@ -114,9 +113,10 @@ class _PendientesScreenState extends State<PendientesScreen> {
                 setState(() => _cerrando = true);
 
                 try {
-                  final entregada = data['cantidadEntregada'] ?? 0;
+                  final entregada =
+                      (data['cantidadEntregada'] ?? 0) as num;
                   final devuelta = cantidad;
-                  final consumoReal = entregada - devuelta;
+                  final consumoReal = entregada.toInt() - devuelta;
                   final perdida = pendiente - devuelta;
 
                   // Devolver stock al depósito
@@ -125,7 +125,8 @@ class _PendientesScreenState extends State<PendientesScreen> {
                       .doc(data['productoId']);
                   final productoDoc = await productoRef.get();
                   final stockActual =
-                      (productoDoc.data()?['stockActual'] ?? 0) as int;
+                      ((productoDoc.data()?['stockActual'] ?? 0) as num)
+                          .toInt();
 
                   final batch = FirebaseFirestore.instance.batch();
 
@@ -140,7 +141,9 @@ class _PendientesScreenState extends State<PendientesScreen> {
                       'cantidadDevuelta': devuelta,
                       'consumoReal': consumoReal,
                       'perdida': perdida,
-                      'motivoCierre': 'Devolución parcial o total',
+                      'motivoCierre': perdida > 0
+                          ? 'Devolución parcial'
+                          : 'Devolución total',
                       'estado': 'cerrado',
                       'fechaCierre': FieldValue.serverTimestamp(),
                     },
@@ -159,15 +162,15 @@ class _PendientesScreenState extends State<PendientesScreen> {
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Error al cerrar el vale'),
+                      SnackBar(
+                        content: Text('Error al cerrar el vale: $e'),
                         backgroundColor: Colors.red,
                       ),
                     );
                   }
                 }
 
-                setState(() => _cerrando = false);
+                if (mounted) setState(() => _cerrando = false);
               },
               child: const Text(
                 'CONFIRMAR',
@@ -256,7 +259,8 @@ class _PendientesScreenState extends State<PendientesScreen> {
                       setState(() => _cerrando = true);
 
                       try {
-                        final entregada = data['cantidadEntregada'] ?? 0;
+                        final entregada =
+                            (data['cantidadEntregada'] ?? 0) as num;
                         final pendiente = _cantidadPendiente(data);
 
                         final batch = FirebaseFirestore.instance.batch();
@@ -267,7 +271,7 @@ class _PendientesScreenState extends State<PendientesScreen> {
                               .doc(doc.id),
                           {
                             'cantidadDevuelta': 0,
-                            'consumoReal': entregada,
+                            'consumoReal': entregada.toInt(),
                             'perdida': pendiente,
                             'motivoCierre': motivoSeleccionado,
                             'estado': 'cerrado',
@@ -288,15 +292,15 @@ class _PendientesScreenState extends State<PendientesScreen> {
                       } catch (e) {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Error al cerrar el vale'),
+                            SnackBar(
+                              content: Text('Error al cerrar el vale: $e'),
                               backgroundColor: Colors.red,
                             ),
                           );
                         }
                       }
 
-                      setState(() => _cerrando = false);
+                      if (mounted) setState(() => _cerrando = false);
                     },
               child: const Text(
                 'CONFIRMAR',
@@ -323,12 +327,53 @@ class _PendientesScreenState extends State<PendientesScreen> {
                     ),
                   )
                 : StreamBuilder<QuerySnapshot>(
+                    // ─── CORRECCIÓN PRINCIPAL ───────────────────────────────
+                    // Se quitó el .orderBy() del lado de Firestore para evitar
+                    // que falle por falta de índice compuesto. El ordenamiento
+                    // se hace en el cliente después de filtrar.
+                    // Si preferís usar .orderBy() en Firestore, creá el índice
+                    // compuesto en la consola: estado (ASC) + fecha (DESC).
+                    // ────────────────────────────────────────────────────────
                     stream: FirebaseFirestore.instance
                         .collection('retiros')
                         .where('estado', isEqualTo: 'pendiente')
-                        .orderBy('fecha', descending: true)
                         .snapshots(),
                     builder: (context, snapshot) {
+                      // ── Muestra el error real en pantalla ──────────────────
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.error_outline,
+                                    color: Colors.red, size: 48),
+                                const SizedBox(height: 16),
+                                const Text(
+                                  'Error al cargar pendientes',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${snapshot.error}',
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 12,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      // ───────────────────────────────────────────────────────
+
                       if (snapshot.connectionState ==
                           ConnectionState.waiting) {
                         return const Center(
@@ -339,10 +384,25 @@ class _PendientesScreenState extends State<PendientesScreen> {
                       }
 
                       final docs = snapshot.data?.docs ?? [];
+
+                      // Filtrar los que realmente tienen pendiente
                       final pendientes = docs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         return _tienePendiente(data);
                       }).toList();
+
+                      // Ordenar por fecha descendente en el cliente
+                      pendientes.sort((a, b) {
+                        final dataA = a.data() as Map<String, dynamic>;
+                        final dataB = b.data() as Map<String, dynamic>;
+                        final fechaA =
+                            (dataA['fecha'] as Timestamp?)?.toDate() ??
+                                DateTime(2000);
+                        final fechaB =
+                            (dataB['fecha'] as Timestamp?)?.toDate() ??
+                                DateTime(2000);
+                        return fechaB.compareTo(fechaA);
+                      });
 
                       if (pendientes.isEmpty) {
                         return Center(
@@ -428,7 +488,8 @@ class _PendientesScreenState extends State<PendientesScreen> {
                                               horizontal: 10,
                                               vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: Colors.orange.withValues(alpha: 0.1),
+                                        color: Colors.orange
+                                            .withValues(alpha: 0.1),
                                         borderRadius:
                                             BorderRadius.circular(8),
                                         border: Border.all(
@@ -482,8 +543,7 @@ class _PendientesScreenState extends State<PendientesScreen> {
                                               color: Colors.red),
                                           shape: RoundedRectangleBorder(
                                             borderRadius:
-                                                BorderRadius.circular(
-                                                    8),
+                                                BorderRadius.circular(8),
                                           ),
                                         ),
                                         child: const Text(
@@ -506,8 +566,7 @@ class _PendientesScreenState extends State<PendientesScreen> {
                                               AppColors.primary,
                                           shape: RoundedRectangleBorder(
                                             borderRadius:
-                                                BorderRadius.circular(
-                                                    8),
+                                                BorderRadius.circular(8),
                                           ),
                                         ),
                                         child: const Text(

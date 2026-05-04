@@ -86,7 +86,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     final data = doc.data() as Map<String, dynamic>;
     final destinos = List<String>.from(data['destinos'] ?? []);
 
-    // Obtener nombres de destinos
     List<String> nombresDestinos = [];
 
     for (final id in destinos) {
@@ -146,11 +145,10 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
       return;
     }
 
-    final data =
-        _productoSeleccionado!.data() as Map<String, dynamic>;
-    final stockActual = data['stockActual'] ?? 0;
+    final data = _productoSeleccionado!.data() as Map<String, dynamic>;
+    final stockActual = (data['stockActual'] ?? 0) as num;
 
-    if (cantidadEntregada > stockActual) {
+    if (cantidadEntregada > stockActual.toInt()) {
       setState(
           () => _error = 'Stock insuficiente. Stock actual: $stockActual');
       return;
@@ -162,6 +160,20 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     });
 
     try {
+      // ─── CORRECCIÓN PRINCIPAL ──────────────────────────────────────────
+      // El estado se determina comparando cantidades:
+      //   - entregada > estimada → 'pendiente' (hay sobrante para devolver)
+      //   - entregada <= estimada → 'cerrado' (entrega exacta o menor,
+      //     no hay nada que devolver, se registra el consumo real ya)
+      // ──────────────────────────────────────────────────────────────────
+      final hayPendiente = cantidadEntregada > cantidadEstimada;
+      final estadoInicial = hayPendiente ? 'pendiente' : 'cerrado';
+
+      // Si no hay pendiente, el consumo real es directo
+      final consumoReal = hayPendiente ? null : cantidadEntregada;
+      final perdida = hayPendiente ? null : 0;
+      final motivoCierre = hayPendiente ? null : 'Entrega exacta o menor';
+
       final batch = FirebaseFirestore.instance.batch();
 
       // Actualizar stock
@@ -169,13 +181,14 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         FirebaseFirestore.instance
             .collection('productos')
             .doc(_productoSeleccionado!.id),
-        {'stockActual': stockActual - cantidadEntregada},
+        {'stockActual': stockActual.toInt() - cantidadEntregada},
       );
 
       // Registrar retiro
       final retiroRef =
           FirebaseFirestore.instance.collection('retiros').doc();
-      batch.set(retiroRef, {
+
+      final Map<String, dynamic> retiroData = {
         'productoId': _productoSeleccionado!.id,
         'productoNombre': data['nombre'],
         'tipo': data['tipo'],
@@ -186,27 +199,37 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         'cantidadEstimada': cantidadEstimada,
         'cantidadEntregada': cantidadEntregada,
         'cantidadDevuelta': 0,
-        'consumoReal': null,
-        'estado': 'pendiente',
+        'consumoReal': consumoReal,
+        'perdida': perdida,
+        'motivoCierre': motivoCierre,
+        'estado': estadoInicial,
         'fecha': FieldValue.serverTimestamp(),
-      });
+        'fechaCierre':
+            hayPendiente ? null : FieldValue.serverTimestamp(),
+      };
+
+      batch.set(retiroRef, retiroData);
 
       await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Retiro registrado correctamente'),
+          SnackBar(
+            content: Text(
+              hayPendiente
+                  ? 'Retiro registrado — quedó pendiente de devolución'
+                  : 'Retiro registrado correctamente',
+            ),
             backgroundColor: AppColors.primary,
           ),
         );
         context.go('/retirados');
       }
     } catch (e) {
-      setState(() => _error = 'Error al guardar. Intentá de nuevo.');
+      setState(() => _error = 'Error al guardar: $e');
     }
 
-    setState(() => _guardando = false);
+    if (mounted) setState(() => _guardando = false);
   }
 
   @override
@@ -259,8 +282,8 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: AppColors.primary, width: 2),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 2),
             ),
           ),
         ),
@@ -273,10 +296,10 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 (v) => setState(() => _etiquetas = v)),
             _buildChip('Prospectos', _prospectos,
                 (v) => setState(() => _prospectos = v)),
-            _buildChip('Español', _espanol,
-                (v) => setState(() => _espanol = v)),
-            _buildChip('Inglés', _ingles,
-                (v) => setState(() => _ingles = v)),
+            _buildChip(
+                'Español', _espanol, (v) => setState(() => _espanol = v)),
+            _buildChip(
+                'Inglés', _ingles, (v) => setState(() => _ingles = v)),
           ],
         ),
         const SizedBox(height: 16),
@@ -299,8 +322,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         const SizedBox(height: 24),
         if (_buscando)
           const Center(
-            child:
-                CircularProgressIndicator(color: AppColors.primary),
+            child: CircularProgressIndicator(color: AppColors.primary),
           ),
         if (_buscado && _resultados.isEmpty)
           const Center(
@@ -314,7 +336,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           ),
         ..._resultados.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          final stock = data['stockActual'] ?? 0;
+          final stock = (data['stockActual'] ?? 0) as num;
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             child: InkWell(
@@ -326,7 +348,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
@@ -351,7 +373,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                               _buildTag(data['idioma'] ?? ''),
                               const SizedBox(width: 8),
                               _buildTag(
-                                'Stock: $stock',
+                                'Stock: ${stock.toInt()}',
                                 color: stock < 1000
                                     ? Colors.orange
                                     : AppColors.primary,
@@ -377,8 +399,17 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   }
 
   Widget _buildFormulario() {
-    final data =
-        _productoSeleccionado!.data() as Map<String, dynamic>;
+    final data = _productoSeleccionado!.data() as Map<String, dynamic>;
+    final stockActual = (data['stockActual'] ?? 0) as num;
+
+    // Preview en tiempo real de si va a quedar pendiente
+    final entregadaPreview =
+        int.tryParse(_cantidadEntregadaController.text.trim());
+    final estimadaPreview =
+        int.tryParse(_cantidadEstimadaController.text.trim());
+    final quedaPendiente = entregadaPreview != null &&
+        estimadaPreview != null &&
+        entregadaPreview > estimadaPreview;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -420,8 +451,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                         const SizedBox(width: 8),
                         _buildTagBlanco(data['idioma'] ?? ''),
                         const SizedBox(width: 8),
-                        _buildTagBlanco(
-                            'Stock: ${data['stockActual'] ?? 0}'),
+                        _buildTagBlanco('Stock: ${stockActual.toInt()}'),
                       ],
                     ),
                   ],
@@ -473,9 +503,8 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: seleccionado
-                      ? AppColors.primary
-                      : Colors.white,
+                  color:
+                      seleccionado ? AppColors.primary : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: AppColors.primary),
                 ),
@@ -501,6 +530,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           controller: _cantidadEstimadaController,
           hint: '',
           teclado: TextInputType.number,
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 20),
 
@@ -511,7 +541,41 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           controller: _cantidadEntregadaController,
           hint: '',
           teclado: TextInputType.number,
+          onChanged: (_) => setState(() {}),
         ),
+
+        // ─── Preview de pendiente ─────────────────────────────────────────
+        if (quedaPendiente) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.pending_actions,
+                    color: Colors.orange, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Quedarán ${entregadaPreview! - estimadaPreview!} unidades pendientes de devolución',
+                    style: const TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        // ─────────────────────────────────────────────────────────────────
+
         const SizedBox(height: 32),
 
         if (_error.isNotEmpty)
@@ -520,7 +584,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.red),
             ),
@@ -539,8 +603,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           child: ElevatedButton(
             onPressed: _guardando ? null : _confirmar,
             child: _guardando
-                ? const CircularProgressIndicator(
-                    color: Colors.white)
+                ? const CircularProgressIndicator(color: Colors.white)
                 : const Text(
                     'CONFIRMAR RETIRO',
                     style: TextStyle(
@@ -572,11 +635,13 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     required String hint,
     TextInputType teclado = TextInputType.text,
     TextCapitalization capitalization = TextCapitalization.none,
+    ValueChanged<String>? onChanged,
   }) {
     return TextField(
       controller: controller,
       keyboardType: teclado,
       textCapitalization: capitalization,
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hint,
         filled: true,
@@ -623,7 +688,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: (color ?? AppColors.primary).withOpacity(0.1),
+        color: (color ?? AppColors.primary).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -641,7 +706,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
