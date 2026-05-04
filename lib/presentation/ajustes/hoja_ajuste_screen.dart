@@ -50,35 +50,79 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
       _retiroSeleccionado = null;
     });
 
-    // Buscar por lote
-    final porLote = await FirebaseFirestore.instance
-        .collection('retiros')
-        .where('lote', isEqualTo: texto.toUpperCase())
-        .orderBy('fecha', descending: true)
-        .get();
+    try {
+      // ─── CORRECCIÓN PRINCIPAL ──────────────────────────────────────────
+      // Se quitó .orderBy() de ambas queries para evitar que fallen por
+      // falta de índice compuesto en Firestore.
+      // El ordenamiento se hace en el cliente después de combinar resultados.
+      //
+      // También se unifica el texto a mayúsculas para el lote, y se busca
+      // el compañero con el texto tal como viene (case-sensitive en Firestore)
+      // pero también con la primera letra en mayúscula para cubrir más casos.
+      // ──────────────────────────────────────────────────────────────────
+      final textoUpper = texto.toUpperCase();
+      final textoCapitalizado =
+          texto.isNotEmpty ? texto[0].toUpperCase() + texto.substring(1) : texto;
 
-    // Buscar por compañero
-    final porCompanero = await FirebaseFirestore.instance
-        .collection('retiros')
-        .where('companero', isEqualTo: texto)
-        .orderBy('fecha', descending: true)
-        .get();
+      // Buscar por lote (siempre en mayúsculas)
+      final porLote = await FirebaseFirestore.instance
+          .collection('retiros')
+          .where('lote', isEqualTo: textoUpper)
+          .get();
 
-    // Combinar y deduplicar
-    final ids = <String>{};
-    final docs = <QueryDocumentSnapshot>[];
+      // Buscar por compañero — texto original
+      final porCompaneroOriginal = await FirebaseFirestore.instance
+          .collection('retiros')
+          .where('companero', isEqualTo: texto)
+          .get();
 
-    for (final doc in [...porLote.docs, ...porCompanero.docs]) {
-      if (ids.add(doc.id)) {
-        docs.add(doc);
+      // Buscar por compañero — capitalizado (por si lo guardaron con mayúscula)
+      final porCompaneroCapitalizado = textoCapitalizado != texto
+          ? await FirebaseFirestore.instance
+              .collection('retiros')
+              .where('companero', isEqualTo: textoCapitalizado)
+              .get()
+          : null;
+
+      // Combinar y deduplicar
+      final ids = <String>{};
+      final docs = <QueryDocumentSnapshot>[];
+
+      for (final doc in [
+        ...porLote.docs,
+        ...porCompaneroOriginal.docs,
+        if (porCompaneroCapitalizado != null)
+          ...porCompaneroCapitalizado.docs,
+      ]) {
+        if (ids.add(doc.id)) {
+          docs.add(doc);
+        }
       }
-    }
 
-    setState(() {
-      _resultados = docs;
-      _buscando = false;
-      _buscado = true;
-    });
+      // Ordenar por fecha descendente en el cliente
+      docs.sort((a, b) {
+        final dataA = a.data() as Map<String, dynamic>;
+        final dataB = b.data() as Map<String, dynamic>;
+        final fechaA =
+            (dataA['fecha'] as Timestamp?)?.toDate() ?? DateTime(2000);
+        final fechaB =
+            (dataB['fecha'] as Timestamp?)?.toDate() ?? DateTime(2000);
+        return fechaB.compareTo(fechaA);
+      });
+
+      setState(() {
+        _resultados = docs;
+        _buscando = false;
+        _buscado = true;
+      });
+    } catch (e) {
+      setState(() {
+        _buscando = false;
+        _buscado = true;
+        _resultados = [];
+        _error = 'Error al buscar: $e';
+      });
+    }
   }
 
   Future<void> _confirmar() async {
@@ -105,7 +149,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         .doc(productoId)
         .get();
     final stockActual =
-        (productoDoc.data()?['stockActual'] ?? 0) as int;
+        ((productoDoc.data()?['stockActual'] ?? 0) as num).toInt();
 
     if (cantidad > stockActual) {
       setState(
@@ -159,10 +203,10 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         context.go('/ajustes');
       }
     } catch (e) {
-      setState(() => _error = 'Error al guardar. Intentá de nuevo.');
+      setState(() => _error = 'Error al guardar: $e');
     }
 
-    setState(() => _guardando = false);
+    if (mounted) setState(() => _guardando = false);
   }
 
   String _formatFechaHora(Timestamp? ts) {
@@ -223,8 +267,8 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
                   hintText: 'Lote o compañero...',
-                  prefixIcon: const Icon(Icons.search,
-                      color: AppColors.primary),
+                  prefixIcon:
+                      const Icon(Icons.search, color: AppColors.primary),
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
@@ -264,7 +308,26 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
           ],
         ),
         const SizedBox(height: 24),
-        if (_buscado && _resultados.isEmpty)
+        if (_error.isNotEmpty) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red),
+            ),
+            child: Text(
+              _error,
+              style: const TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+        if (_buscado && _resultados.isEmpty && _error.isEmpty)
           const Center(
             child: Text(
               'No se encontraron retiros',
@@ -280,15 +343,17 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () =>
-                  setState(() => _retiroSeleccionado = doc),
+              onTap: () => setState(() {
+                _retiroSeleccionado = doc;
+                _error = '';
+              }),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
@@ -386,8 +451,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                     Wrap(
                       spacing: 8,
                       children: [
-                        _buildTagBlanco(
-                            '📦 ${data['lote'] ?? ''}'),
+                        _buildTagBlanco('📦 ${data['lote'] ?? ''}'),
                         _buildTagBlanco(
                             '👤 ${data['companero'] ?? ''}'),
                         _buildTagBlanco(
@@ -399,8 +463,10 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () =>
-                    setState(() => _retiroSeleccionado = null),
+                onPressed: () => setState(() {
+                  _retiroSeleccionado = null;
+                  _error = '';
+                }),
               ),
             ],
           ),
@@ -431,8 +497,8 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: AppColors.primary, width: 2),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 2),
             ),
           ),
         ),
@@ -461,9 +527,8 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: seleccionado
-                      ? AppColors.primary
-                      : Colors.white,
+                  color:
+                      seleccionado ? AppColors.primary : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: AppColors.primary),
                 ),
@@ -509,7 +574,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.red),
             ),
@@ -528,8 +593,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
           child: ElevatedButton(
             onPressed: _guardando ? null : _confirmar,
             child: _guardando
-                ? const CircularProgressIndicator(
-                    color: Colors.white)
+                ? const CircularProgressIndicator(color: Colors.white)
                 : const Text(
                     'CONFIRMAR AJUSTE',
                     style: TextStyle(
@@ -548,7 +612,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.08),
+        color: AppColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -566,7 +630,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
