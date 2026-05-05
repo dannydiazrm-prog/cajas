@@ -22,14 +22,13 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
   bool _buscado = false;
   String? _expandidoId;
 
-  // Campos del formulario expandido
   final _cantidadController = TextEditingController();
   final _codigoController = TextEditingController();
   List<Map<String, dynamic>> _destinos = [];
   Map<String, bool> _destinosSeleccionados = {};
   bool _guardando = false;
-  
-@override
+
+  @override
   void dispose() {
     _nombreController.dispose();
     _cantidadController.dispose();
@@ -105,11 +104,10 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
       return;
     }
     _cantidadController.clear();
+    _codigoController.clear();
     await _cargarDestinos();
 
-    // Precargar destinos ya habilitados en el producto
-    final destinosActuales =
-        List<String>.from(data['destinos'] ?? []);
+    final destinosActuales = List<String>.from(data['destinos'] ?? []);
     setState(() {
       _expandidoId = id;
       for (var d in _destinos) {
@@ -118,7 +116,8 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
       }
     });
   }
-Future<void> _confirmar(QueryDocumentSnapshot doc) async {
+
+  Future<void> _confirmar(QueryDocumentSnapshot doc) async {
     final cantidad = int.tryParse(_cantidadController.text.trim());
     final codigoSufijo = _codigoController.text.trim();
 
@@ -153,7 +152,6 @@ Future<void> _confirmar(QueryDocumentSnapshot doc) async {
           .map((e) => e.key)
           .toList();
 
-      // Determinar prefijo según tipo y destinos
       String prefijo;
       if (data['tipo'] == 'Prospecto') {
         prefijo = '65';
@@ -166,12 +164,10 @@ Future<void> _confirmar(QueryDocumentSnapshot doc) async {
 
       final codigoCompleto = '$prefijo$codigoSufijo';
 
-      // Obtener stockPorDestino actual
       final stockPorDestino = Map<String, dynamic>.from(
         data['stockPorDestino'] ?? {},
       );
 
-      // Determinar clave de destino
       String destinoClave;
       if (destinosHabilitados.contains('todos')) {
         destinoClave = 'todos';
@@ -188,8 +184,7 @@ Future<void> _confirmar(QueryDocumentSnapshot doc) async {
       final nuevoStockTotal = stockPorDestino.values
           .fold<int>(0, (sum, v) => sum + (v as int));
 
-      final destinosActuales =
-          List<String>.from(data['destinos'] ?? []);
+      final destinosActuales = List<String>.from(data['destinos'] ?? []);
       for (final d in destinosHabilitados) {
         if (!destinosActuales.contains(d)) {
           destinosActuales.add(d);
@@ -235,73 +230,7 @@ Future<void> _confirmar(QueryDocumentSnapshot doc) async {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Recepción registrada — Código: $codigoCompleto'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() => _guardando = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al guardar. Intentá de nuevo.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-    setState(() => _guardando = true);
-
-    try {
-      final data = doc.data() as Map<String, dynamic>;
-      final stockActual = data['stockActual'] ?? 0;
-      final destinosHabilitados = _destinosSeleccionados.entries
-          .where((e) => e.value)
-          .map((e) => e.key)
-          .toList();
-
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Actualizar stock y destinos del producto
-      batch.update(
-        FirebaseFirestore.instance.collection('productos').doc(doc.id),
-        {
-          'stockActual': stockActual + cantidad,
-          'destinos': destinosHabilitados,
-        },
-      );
-
-      // Registrar en historial
-      batch.set(
-        FirebaseFirestore.instance.collection('recepciones').doc(),
-        {
-          'productoId': doc.id,
-          'productoNombre': data['nombre'],
-          'tipo': data['tipo'],
-          'idioma': data['idioma'],
-          'cantidad': cantidad,
-          'destinos': destinosHabilitados,
-          'fecha': FieldValue.serverTimestamp(),
-        },
-      );
-
-      await batch.commit();
-
-      setState(() {
-        _expandidoId = null;
-        _guardando = false;
-      });
-
-      _buscar();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Recepción registrada correctamente'),
+            content: Text('Recepción registrada — Código: $codigoCompleto'),
             backgroundColor: AppColors.primary,
           ),
         );
@@ -394,7 +323,9 @@ Future<void> _confirmar(QueryDocumentSnapshot doc) async {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: expandido ? AppColors.primary : AppColors.primary.withOpacity(0.3),
+          color: expandido
+              ? AppColors.primary
+              : AppColors.primary.withOpacity(0.3),
           width: expandido ? 2 : 1,
         ),
       ),
