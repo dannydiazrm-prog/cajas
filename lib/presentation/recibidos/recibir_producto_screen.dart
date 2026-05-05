@@ -24,14 +24,16 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
 
   // Campos del formulario expandido
   final _cantidadController = TextEditingController();
+  final _codigoController = TextEditingController();
   List<Map<String, dynamic>> _destinos = [];
   Map<String, bool> _destinosSeleccionados = {};
   bool _guardando = false;
-
-  @override
+  
+@override
   void dispose() {
     _nombreController.dispose();
     _cantidadController.dispose();
+    _codigoController.dispose();
     super.dispose();
   }
 
@@ -116,9 +118,10 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
       }
     });
   }
-
-  Future<void> _confirmar(QueryDocumentSnapshot doc) async {
+Future<void> _confirmar(QueryDocumentSnapshot doc) async {
     final cantidad = int.tryParse(_cantidadController.text.trim());
+    final codigoSufijo = _codigoController.text.trim();
+
     if (cantidad == null || cantidad <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -128,6 +131,128 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
       );
       return;
     }
+
+    if (codigoSufijo.isEmpty ||
+        codigoSufijo.length != 3 ||
+        int.tryParse(codigoSufijo) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresá los 3 dígitos del código'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _guardando = true);
+
+    try {
+      final data = doc.data() as Map<String, dynamic>;
+      final destinosHabilitados = _destinosSeleccionados.entries
+          .where((e) => e.value)
+          .map((e) => e.key)
+          .toList();
+
+      // Determinar prefijo según tipo y destinos
+      String prefijo;
+      if (data['tipo'] == 'Prospecto') {
+        prefijo = '65';
+      } else if (destinosHabilitados.contains('todos') ||
+          destinosHabilitados.contains('local')) {
+        prefijo = '67';
+      } else {
+        prefijo = '68';
+      }
+
+      final codigoCompleto = '$prefijo$codigoSufijo';
+
+      // Obtener stockPorDestino actual
+      final stockPorDestino = Map<String, dynamic>.from(
+        data['stockPorDestino'] ?? {},
+      );
+
+      // Determinar clave de destino
+      String destinoClave;
+      if (destinosHabilitados.contains('todos')) {
+        destinoClave = 'todos';
+      } else if (destinosHabilitados.isNotEmpty) {
+        destinoClave = destinosHabilitados.first;
+      } else {
+        destinoClave = 'todos';
+      }
+
+      final stockActualDestino =
+          (stockPorDestino[destinoClave] ?? 0) as int;
+      stockPorDestino[destinoClave] = stockActualDestino + cantidad;
+
+      final nuevoStockTotal = stockPorDestino.values
+          .fold<int>(0, (sum, v) => sum + (v as int));
+
+      final destinosActuales =
+          List<String>.from(data['destinos'] ?? []);
+      for (final d in destinosHabilitados) {
+        if (!destinosActuales.contains(d)) {
+          destinosActuales.add(d);
+        }
+      }
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      batch.update(
+        FirebaseFirestore.instance.collection('productos').doc(doc.id),
+        {
+          'stockActual': nuevoStockTotal,
+          'stockPorDestino': stockPorDestino,
+          'destinos': destinosActuales,
+        },
+      );
+
+      batch.set(
+        FirebaseFirestore.instance.collection('recepciones').doc(),
+        {
+          'productoId': doc.id,
+          'productoNombre': data['nombre'],
+          'tipo': data['tipo'],
+          'idioma': data['idioma'],
+          'cantidad': cantidad,
+          'codigo': codigoCompleto,
+          'destinoClave': destinoClave,
+          'destinos': destinosHabilitados,
+          'fecha': FieldValue.serverTimestamp(),
+        },
+      );
+
+      await batch.commit();
+
+      setState(() {
+        _expandidoId = null;
+        _guardando = false;
+        _codigoController.clear();
+      });
+
+      _buscar();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Recepción registrada — Código: $codigoCompleto'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _guardando = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al guardar. Intentá de nuevo.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
     setState(() => _guardando = true);
 
@@ -337,6 +462,40 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       hintText: 'Ej: 5000',
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            const BorderSide(color: AppColors.primary),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: AppColors.primary, width: 2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'CÓDIGO (3 DÍGITOS)',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _codigoController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 3,
+                    decoration: InputDecoration(
+                      hintText: '123',
+                      counterText: '',
+                      helperText:
+                          'El prefijo (65/67/68) se asigna automáticamente',
                       filled: true,
                       fillColor: Colors.grey[50],
                       border: OutlineInputBorder(
