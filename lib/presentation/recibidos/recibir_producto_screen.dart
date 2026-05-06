@@ -592,7 +592,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
             _buildChip('Español', _espanol,
                 (v) => setState(() => _espanol = v)),
             _buildChip(
-                'Inglés', _ingles, (v) => setState(() => _ingles = v)),
+                'IN', _ingles, (v) => setState(() => _ingles = v)),
           ],
         ),
       ],

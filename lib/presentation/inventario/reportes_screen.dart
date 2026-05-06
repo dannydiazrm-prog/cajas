@@ -263,7 +263,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                               (v) => setState(() => _prospectos = v)),
                           _buildChip('Español', _espanol,
                               (v) => setState(() => _espanol = v)),
-                          _buildChip('Inglés', _ingles,
+                          _buildChip('IN', _ingles,
                               (v) => setState(() => _ingles = v)),
                           _buildChip('Código 65', _prefijo65,
                               (v) => setState(() => _prefijo65 = v)),

@@ -278,7 +278,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                 Row(
                   children: [
                     {'label': 'ESPAÑOL', 'value': 'ES'},
-                    {'label': 'INGLÉS', 'value': 'EN'},
+                    {'label': 'IN', 'value': 'EN'},
                   ].map((i) {
                     return Expanded(
                       child: Padding(
@@ -457,7 +457,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
             _buildChip('Español', _espanol,
                 (v) => setState(() => _espanol = v)),
             _buildChip(
-                'Inglés', _ingles, (v) => setState(() => _ingles = v)),
+                'IN', _ingles, (v) => setState(() => _ingles = v)),
             _buildChip('Código 65', _prefijo65,
                 (v) => setState(() => _prefijo65 = v)),
             _buildChip('Código 67', _prefijo67,
@@ -495,8 +495,35 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
 
   Widget _buildProductoItem(QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    final stock = data['stockActual'] ?? 0;
-    final bajominimo = stock < 1000;
+    final stockPorDestino = Map<String, dynamic>.from(
+      data['stockPorDestino'] ?? {},
+    );
+
+    // Calcular stock a mostrar según filtro activo
+    int stockMostrar;
+    String? etiquetaCodigo;
+
+    if (_prefijo65 && !_prefijo67 && !_prefijo68) {
+      stockMostrar = data['stockActual'] ?? 0;
+      etiquetaCodigo = '65';
+    } else if (_prefijo67 && !_prefijo65 && !_prefijo68) {
+      final stockTodos =
+          (stockPorDestino['todos'] as num?)?.toInt() ?? 0;
+      final stockLocal =
+          (stockPorDestino['local'] as num?)?.toInt() ?? 0;
+      stockMostrar = stockTodos + stockLocal;
+      etiquetaCodigo = '67';
+    } else if (_prefijo68 && !_prefijo65 && !_prefijo67) {
+      stockMostrar = stockPorDestino.entries
+          .where((e) => e.key != 'todos' && e.key != 'local')
+          .fold<int>(0, (sum, e) => sum + ((e.value as num).toInt()));
+      etiquetaCodigo = '68';
+    } else {
+      stockMostrar = data['stockActual'] ?? 0;
+      etiquetaCodigo = null;
+    }
+
+    final bajominimo = stockMostrar < 1000;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -532,8 +559,11 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                     const SizedBox(width: 8),
                     _buildTag(data['idioma'] ?? ''),
                     const SizedBox(width: 8),
+                    if (etiquetaCodigo != null)
+                      _buildTag('Cód. $etiquetaCodigo'),
+                    if (etiquetaCodigo != null) const SizedBox(width: 8),
                     _buildTag(
-                      'Stock: $stock',
+                      'Stock: $stockMostrar',
                       color: bajominimo ? Colors.orange : AppColors.primary,
                     ),
                   ],

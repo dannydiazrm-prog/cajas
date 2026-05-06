@@ -326,7 +326,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 (v) => setState(() => _prospectos = v)),
             _buildChip('Español', _espanol,
                 (v) => setState(() => _espanol = v)),
-            _buildChip('Inglés', _ingles,
+            _buildChip('IN', _ingles,
                 (v) => setState(() => _ingles = v)),
           ],
         ),
@@ -506,7 +506,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         const SizedBox(height: 8),
         _buildTextField(
           controller: _loteController,
-          hint: 'Ej: LOT-2026-001',
+          hint: '',
           capitalization: TextCapitalization.characters,
         ),
         const SizedBox(height: 20),

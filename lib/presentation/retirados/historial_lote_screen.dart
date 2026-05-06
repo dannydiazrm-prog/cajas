@@ -281,7 +281,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                             textCapitalization:
                                 TextCapitalization.characters,
                             decoration: InputDecoration(
-                              hintText: 'Ej: LOT-2026-001',
+                              hintText: '',
                               prefixIcon: const Icon(
                                   Icons.search,
                                   color: AppColors.primary),
