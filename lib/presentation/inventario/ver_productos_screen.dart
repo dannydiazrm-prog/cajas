@@ -278,7 +278,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                 Row(
                   children: [
                     {'label': 'ESPAÑOL', 'value': 'ES'},
-                    {'label': 'IN', 'value': 'EN'},
+                    {'label': 'INGLÈS', 'value': 'EN'},
                   ].map((i) {
                     return Expanded(
                       child: Padding(

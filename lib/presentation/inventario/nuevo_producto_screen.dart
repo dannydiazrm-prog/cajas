@@ -165,7 +165,7 @@ class _NuevoProductoScreenState extends State<NuevoProductoScreen> {
                           ),
                           const SizedBox(width: 16),
                           _buildSelector(
-                            label: 'IN',
+                            label: 'INGLÈS',
                             icon: Icons.language,
                             seleccionado: _idioma == 'EN',
                             onTap: () => setState(() => _idioma = 'EN'),

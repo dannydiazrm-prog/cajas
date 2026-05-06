@@ -326,7 +326,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 (v) => setState(() => _prospectos = v)),
             _buildChip('Español', _espanol,
                 (v) => setState(() => _espanol = v)),
-            _buildChip('IN', _ingles,
+            _buildChip('Inglés', _ingles,
                 (v) => setState(() => _ingles = v)),
           ],
         ),
