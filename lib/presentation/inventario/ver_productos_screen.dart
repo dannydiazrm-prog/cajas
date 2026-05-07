@@ -20,6 +20,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
   bool _ingles = false;
   bool _espanol = false;
   bool _prefijo65 = false;
+  bool _prefijo66 = false;
   bool _prefijo67 = false;
   bool _prefijo68 = false;
   List<QueryDocumentSnapshot> _resultados = [];
@@ -75,13 +76,16 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
       }).toList();
     }
 
-    if (_prefijo65 || _prefijo67 || _prefijo68) {
+    if (_prefijo65 || _prefijo66 || _prefijo67 || _prefijo68) {
       docs = docs.where((d) {
         final data = d.data() as Map<String, dynamic>;
         final stockPorDestino = Map<String, dynamic>.from(
           data['stockPorDestino'] ?? {},
         );
         if (_prefijo65 && data['tipo'] == 'Prospecto') return true;
+        if (_prefijo66 &&
+            (stockPorDestino.containsKey('todos') ||
+                stockPorDestino.containsKey('local'))) return true;
         if (_prefijo67 &&
             (stockPorDestino.containsKey('todos') ||
                 stockPorDestino.containsKey('local'))) return true;
@@ -278,7 +282,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                 Row(
                   children: [
                     {'label': 'ESPAÑOL', 'value': 'ES'},
-                    {'label': 'INGLÈS', 'value': 'EN'},
+                    {'label': 'INGLÉS', 'value': 'EN'},
                   ].map((i) {
                     return Expanded(
                       child: Padding(
@@ -456,10 +460,11 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                 (v) => setState(() => _prospectos = v)),
             _buildChip('Español', _espanol,
                 (v) => setState(() => _espanol = v)),
-            _buildChip(
-                'IN', _ingles, (v) => setState(() => _ingles = v)),
+            _buildChip('IN', _ingles, (v) => setState(() => _ingles = v)),
             _buildChip('Código 65', _prefijo65,
                 (v) => setState(() => _prefijo65 = v)),
+            _buildChip('Código 66', _prefijo66,
+                (v) => setState(() => _prefijo66 = v)),
             _buildChip('Código 67', _prefijo67,
                 (v) => setState(() => _prefijo67 = v)),
             _buildChip('Código 68', _prefijo68,
@@ -499,21 +504,23 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
       data['stockPorDestino'] ?? {},
     );
 
-    // Calcular stock a mostrar según filtro activo
     int stockMostrar;
     String? etiquetaCodigo;
 
-    if (_prefijo65 && !_prefijo67 && !_prefijo68) {
+    if (_prefijo65 && !_prefijo66 && !_prefijo67 && !_prefijo68) {
       stockMostrar = data['stockActual'] ?? 0;
       etiquetaCodigo = '65';
-    } else if (_prefijo67 && !_prefijo65 && !_prefijo68) {
-      final stockTodos =
-          (stockPorDestino['todos'] as num?)?.toInt() ?? 0;
-      final stockLocal =
-          (stockPorDestino['local'] as num?)?.toInt() ?? 0;
+    } else if (_prefijo66 && !_prefijo65 && !_prefijo67 && !_prefijo68) {
+      final stockTodos = (stockPorDestino['todos'] as num?)?.toInt() ?? 0;
+      final stockLocal = (stockPorDestino['local'] as num?)?.toInt() ?? 0;
+      stockMostrar = stockTodos + stockLocal;
+      etiquetaCodigo = '66';
+    } else if (_prefijo67 && !_prefijo65 && !_prefijo66 && !_prefijo68) {
+      final stockTodos = (stockPorDestino['todos'] as num?)?.toInt() ?? 0;
+      final stockLocal = (stockPorDestino['local'] as num?)?.toInt() ?? 0;
       stockMostrar = stockTodos + stockLocal;
       etiquetaCodigo = '67';
-    } else if (_prefijo68 && !_prefijo65 && !_prefijo67) {
+    } else if (_prefijo68 && !_prefijo65 && !_prefijo66 && !_prefijo67) {
       stockMostrar = stockPorDestino.entries
           .where((e) => e.key != 'todos' && e.key != 'local')
           .fold<int>(0, (sum, e) => sum + ((e.value as num).toInt()));

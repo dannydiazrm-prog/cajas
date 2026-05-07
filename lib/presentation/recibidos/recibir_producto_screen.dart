@@ -115,21 +115,9 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
     });
   }
 
-  String _calcularPrefijo(Map<String, dynamic> data) {
-    final destinosHabilitados = _destinosSeleccionados.entries
-        .where((e) => e.value)
-        .map((e) => e.key)
-        .toList();
-    if (data['tipo'] == 'Prospecto') return '65';
-    if (destinosHabilitados.contains('todos') ||
-        destinosHabilitados.contains('local')) return '67';
-    if (destinosHabilitados.isNotEmpty) return '68';
-    return '??';
-  }
-
   Future<void> _confirmar(QueryDocumentSnapshot doc) async {
     final cantidad = int.tryParse(_cantidadController.text.trim());
-    final codigoSufijo = _codigoController.text.trim();
+    final codigo = _codigoController.text.trim();
 
     if (cantidad == null || cantidad <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -141,12 +129,10 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
       return;
     }
 
-    if (codigoSufijo.isEmpty ||
-        codigoSufijo.length != 3 ||
-        int.tryParse(codigoSufijo) == null) {
+    if (codigo.isEmpty || codigo.length != 5 || int.tryParse(codigo) == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ingresá los 3 dígitos del código'),
+          content: Text('Ingresá los 5 dígitos del código'),
           backgroundColor: Colors.red,
         ),
       );
@@ -161,9 +147,6 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
           .where((e) => e.value)
           .map((e) => e.key)
           .toList();
-
-      final prefijo = _calcularPrefijo(data);
-      final codigoCompleto = '$prefijo$codigoSufijo';
 
       final stockPorDestino = Map<String, dynamic>.from(
         data['stockPorDestino'] ?? {},
@@ -185,8 +168,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
       final nuevoStockTotal = stockPorDestino.values
           .fold<int>(0, (sum, v) => sum + (v as int));
 
-      final destinosActuales =
-          List<String>.from(data['destinos'] ?? []);
+      final destinosActuales = List<String>.from(data['destinos'] ?? []);
       for (final d in destinosHabilitados) {
         if (!destinosActuales.contains(d)) {
           destinosActuales.add(d);
@@ -212,7 +194,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
           'tipo': data['tipo'],
           'idioma': data['idioma'],
           'cantidad': cantidad,
-          'codigo': codigoCompleto,
+          'codigo': codigo,
           'destinoClave': destinoClave,
           'destinos': destinosHabilitados,
           'fecha': FieldValue.serverTimestamp(),
@@ -232,7 +214,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Recepción registrada — Código: $codigoCompleto'),
+            content: Text('Recepción registrada — Código: $codigo'),
             backgroundColor: AppColors.primary,
           ),
         );
@@ -359,8 +341,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
                             const SizedBox(width: 8),
                             _buildTag(data['idioma'] ?? ''),
                             const SizedBox(width: 8),
-                            _buildTag(
-                                'Stock: ${data['stockActual'] ?? 0}'),
+                            _buildTag('Stock: ${data['stockActual'] ?? 0}'),
                           ],
                         ),
                       ],
@@ -412,7 +393,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'CÓDIGO',
+                    'CÓDIGO (5 DÍGITOS)',
                     style: TextStyle(
                       color: AppColors.primary,
                       fontSize: 13,
@@ -421,58 +402,26 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 18),
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(12),
-                            bottomLeft: Radius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          _calcularPrefijo(data),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                          ),
-                        ),
+                  TextField(
+                    controller: _codigoController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 5,
+                    decoration: InputDecoration(
+                      hintText: 'Ej: 65123',
+                      counterText: '',
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            const BorderSide(color: AppColors.primary),
                       ),
-                      Expanded(
-                        child: TextField(
-                          controller: _codigoController,
-                          keyboardType: TextInputType.number,
-                          maxLength: 3,
-                          onChanged: (_) => setState(() {}),
-                          decoration: InputDecoration(
-                            hintText: '123',
-                            counterText: '',
-                            filled: true,
-                            fillColor: Colors.grey[50],
-                            border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.only(
-                                topRight: Radius.circular(12),
-                                bottomRight: Radius.circular(12),
-                              ),
-                              borderSide:
-                                  BorderSide(color: AppColors.primary),
-                            ),
-                            focusedBorder: const OutlineInputBorder(
-                              borderRadius: BorderRadius.only(
-                                topRight: Radius.circular(12),
-                                bottomRight: Radius.circular(12),
-                              ),
-                              borderSide: BorderSide(
-                                  color: AppColors.primary, width: 2),
-                            ),
-                          ),
-                        ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: AppColors.primary, width: 2),
                       ),
-                    ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -514,8 +463,8 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        onChanged: (v) => setState(
-                            () => _destinosSeleccionados[id] = v),
+                        onChanged: (v) =>
+                            setState(() => _destinosSeleccionados[id] = v),
                       ),
                     );
                   }),
@@ -592,7 +541,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
             _buildChip('Español', _espanol,
                 (v) => setState(() => _espanol = v)),
             _buildChip(
-                'INGLES', _ingles, (v) => setState(() => _ingles = v)),
+                'IN', _ingles, (v) => setState(() => _ingles = v)),
           ],
         ),
       ],
