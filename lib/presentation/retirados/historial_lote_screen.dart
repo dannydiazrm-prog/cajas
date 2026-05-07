@@ -37,22 +37,23 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
     });
 
     final snapshot = await FirebaseFirestore.instance
-    .collection('retiros')
-    .where('lote', isEqualTo: lote)
-    .get();
+        .collection('retiros')
+        .where('lote', isEqualTo: lote)
+        .get();
 
-final docs = snapshot.docs..sort((a, b) {
-  final fechaA = (a.data() as Map<String, dynamic>)['fecha'] as Timestamp?;
-  final fechaB = (b.data() as Map<String, dynamic>)['fecha'] as Timestamp?;
-  if (fechaA == null || fechaB == null) return 0;
-  return fechaA.compareTo(fechaB);
-});
+    final docs = snapshot.docs..sort((a, b) {
+      final fechaA = (a.data() as Map<String, dynamic>)['fecha'] as Timestamp?;
+      final fechaB = (b.data() as Map<String, dynamic>)['fecha'] as Timestamp?;
+      if (fechaA == null || fechaB == null) return 0;
+      return fechaA.compareTo(fechaB);
+    });
 
     setState(() {
-  _resultados = docs;
-  _buscando = false;
-  _buscado = true;
-});
+      _resultados = docs;
+      _buscando = false;
+      _buscado = true;
+    });
+  }
 
   String _formatFechaHora(Timestamp? ts) {
     if (ts == null) return '-';
@@ -73,7 +74,6 @@ final docs = snapshot.docs..sort((a, b) {
       final fechaStr = _formatFecha(fecha);
       final lote = _loteController.text.trim();
 
-      // Totales
       int totalEntregado = 0;
       int totalConsumido = 0;
       int totalDevuelto = 0;
@@ -202,11 +202,8 @@ final docs = snapshot.docs..sort((a, b) {
             pw.Container(
               padding: const pw.EdgeInsets.all(12),
               decoration: pw.BoxDecoration(
-                border: pw.Border.all(
-                  color: PdfColor.fromHex('#0c6246'),
-                ),
-                borderRadius: const pw.BorderRadius.all(
-                    pw.Radius.circular(4)),
+                border: pw.Border.all(color: PdfColor.fromHex('#0c6246')),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
               ),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -220,8 +217,7 @@ final docs = snapshot.docs..sort((a, b) {
                     ),
                   ),
                   pw.SizedBox(height: 8),
-                  pw.Text(
-                      'Total movimientos: ${_resultados.length}',
+                  pw.Text('Total movimientos: ${_resultados.length}',
                       style: const pw.TextStyle(fontSize: 10)),
                   pw.Text('Total entregado: $totalEntregado unidades',
                       style: const pw.TextStyle(fontSize: 10)),
@@ -283,27 +279,24 @@ final docs = snapshot.docs..sort((a, b) {
                         Expanded(
                           child: TextField(
                             controller: _loteController,
-                            textCapitalization:
-                                TextCapitalization.sentences,
+                            textCapitalization: TextCapitalization.sentences,
                             decoration: InputDecoration(
                               hintText: '',
                               prefixIcon: const Icon(
-                                  Icons.search,
-                                  color: AppColors.primary),
+                                Icons.search,
+                                color: AppColors.primary,
+                              ),
                               filled: true,
                               fillColor: Colors.white,
                               border: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(12),
                                 borderSide: const BorderSide(
                                     color: AppColors.primary),
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(12),
                                 borderSide: const BorderSide(
-                                    color: AppColors.primary,
-                                    width: 2),
+                                    color: AppColors.primary, width: 2),
                               ),
                             ),
                             onSubmitted: (_) => _buscar(),
@@ -347,7 +340,6 @@ final docs = snapshot.docs..sort((a, b) {
                           ),
                         )
                       else ...[
-                        // Resumen
                         _buildResumen(),
                         const SizedBox(height: 16),
                         Row(
@@ -362,11 +354,11 @@ final docs = snapshot.docs..sort((a, b) {
                               ),
                             ),
                             ElevatedButton.icon(
-                              onPressed:
-                                  _generando ? null : _generarPDF,
+                              onPressed: _generando ? null : _generarPDF,
                               icon: const Icon(
-                                  Icons.picture_as_pdf_outlined,
-                                  size: 18),
+                                Icons.picture_as_pdf_outlined,
+                                size: 18,
+                              ),
                               label: _generando
                                   ? const SizedBox(
                                       width: 16,
@@ -382,13 +374,10 @@ final docs = snapshot.docs..sort((a, b) {
                         ),
                         const SizedBox(height: 12),
                         ..._resultados.map((doc) {
-                          final data =
-                              doc.data() as Map<String, dynamic>;
-                          final estado =
-                              data['estado'] ?? 'pendiente';
+                          final data = doc.data() as Map<String, dynamic>;
+                          final estado = data['estado'] ?? 'pendiente';
                           final consumoReal = data['consumoReal'] ??
-                              data['cantidadEntregada'] ??
-                              0;
+                              data['cantidadEntregada'] ?? 0;
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
@@ -398,15 +387,13 @@ final docs = snapshot.docs..sort((a, b) {
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: estado == 'cerrado'
-                                    ? AppColors.primary
-                                        .withOpacity(0.3)
+                                    ? AppColors.primary.withOpacity(0.3)
                                     : Colors.orange,
                                 width: estado == 'cerrado' ? 1 : 2,
                               ),
                             ),
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
@@ -421,18 +408,13 @@ final docs = snapshot.docs..sort((a, b) {
                                       ),
                                     ),
                                     Container(
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: estado == 'cerrado'
-                                            ? Colors.green
-                                                .withOpacity(0.1)
-                                            : Colors.orange
-                                                .withOpacity(0.1),
-                                        borderRadius:
-                                            BorderRadius.circular(6),
+                                            ? Colors.green.withOpacity(0.1)
+                                            : Colors.orange.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
                                           color: estado == 'cerrado'
                                               ? Colors.green
@@ -461,26 +443,19 @@ final docs = snapshot.docs..sort((a, b) {
                                   children: [
                                     _buildTag(data['tipo'] ?? ''),
                                     _buildTag(data['idioma'] ?? ''),
-                                    _buildTag(
-                                        '🌍 ${data['destino'] ?? ''}'),
-                                    _buildTag(
-                                        '👤 ${data['companero'] ?? ''}'),
-                                    _buildTag(
-                                        '📤 Entregado: ${data['cantidadEntregada'] ?? 0}'),
-                                    _buildTag(
-                                        '✅ Consumido: $consumoReal'),
+                                    _buildTag('🌍 ${data['destino'] ?? ''}'),
+                                    _buildTag('👤 ${data['companero'] ?? ''}'),
+                                    _buildTag('📤 Entregado: ${data['cantidadEntregada'] ?? 0}'),
+                                    _buildTag('✅ Consumido: $consumoReal'),
                                     if (estado == 'cerrado')
-                                      _buildTag(
-                                          '↩️ Devuelto: ${data['cantidadDevuelta'] ?? 0}'),
+                                      _buildTag('↩️ Devuelto: ${data['cantidadDevuelta'] ?? 0}'),
                                     if (data['motivoCierre'] != null)
-                                      _buildTag(
-                                          '📝 ${data['motivoCierre']}'),
+                                      _buildTag('📝 ${data['motivoCierre']}'),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  _formatFechaHora(
-                                      data['fecha'] as Timestamp?),
+                                  _formatFechaHora(data['fecha'] as Timestamp?),
                                   style: TextStyle(
                                     color: Colors.grey[500],
                                     fontSize: 11,
@@ -512,8 +487,7 @@ final docs = snapshot.docs..sort((a, b) {
     for (final doc in _resultados) {
       final data = doc.data() as Map<String, dynamic>;
       totalEntregado += (data['cantidadEntregada'] ?? 0) as int;
-      totalConsumido += (data['consumoReal'] ??
-          data['cantidadEntregada'] ?? 0) as int;
+      totalConsumido += (data['consumoReal'] ?? data['cantidadEntregada'] ?? 0) as int;
       totalDevuelto += (data['cantidadDevuelta'] ?? 0) as int;
       if (data['estado'] == 'cerrado') {
         cerrados++;
@@ -543,31 +517,16 @@ final docs = snapshot.docs..sort((a, b) {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(
-                child: _buildResumenItem(
-                    'ENTREGADO', totalEntregado.toString()),
-              ),
-              Expanded(
-                child: _buildResumenItem(
-                    'CONSUMIDO', totalConsumido.toString()),
-              ),
-              Expanded(
-                child: _buildResumenItem(
-                    'DEVUELTO', totalDevuelto.toString()),
-              ),
+              Expanded(child: _buildResumenItem('ENTREGADO', totalEntregado.toString())),
+              Expanded(child: _buildResumenItem('CONSUMIDO', totalConsumido.toString())),
+              Expanded(child: _buildResumenItem('DEVUELTO', totalDevuelto.toString())),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(
-                child: _buildResumenItem(
-                    'CERRADOS', cerrados.toString()),
-              ),
-              Expanded(
-                child: _buildResumenItem(
-                    'PENDIENTES', pendientes.toString()),
-              ),
+              Expanded(child: _buildResumenItem('CERRADOS', cerrados.toString())),
+              Expanded(child: _buildResumenItem('PENDIENTES', pendientes.toString())),
               const Expanded(child: SizedBox()),
             ],
           ),
