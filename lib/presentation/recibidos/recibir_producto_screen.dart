@@ -210,6 +210,22 @@ if (destinosHabilitados.contains('todos')) {
         },
       );
 
+// Agregar prefijo a usados si no existe
+final prefijo = codigo.substring(0, 2);
+final prefijosDoc = await FirebaseFirestore.instance
+    .collection('config')
+    .doc('prefijos')
+    .get();
+final usados = List<String>.from(prefijosDoc.data()?['usados'] ?? []);
+if (!usados.contains(prefijo)) {
+  batch.update(
+    FirebaseFirestore.instance.collection('config').doc('prefijos'),
+    {
+      'usados': FieldValue.arrayUnion([prefijo]),
+    },
+  );
+}
+
       await batch.commit();
 
       setState(() {

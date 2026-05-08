@@ -19,15 +19,35 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
   bool _etiquetas = false;
   bool _ingles = false;
   bool _espanol = false;
-  bool _prefijo65 = false;
-  bool _prefijo66 = false;
-  bool _prefijo67 = false;
-  bool _prefijo68 = false;
+  Set<String> _prefijosSeleccionados = {};
+  List<String> _prefijosUsados = [];
   List<QueryDocumentSnapshot> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
   Map<String, Map<String, int>> _stockPorCodigo = {};
   List<String> _prefijosActivos = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarPrefijos();
+  }
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarPrefijos() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('config')
+        .doc('prefijos')
+        .get();
+    final usados = List<String>.from(doc.data()?['usados'] ?? []);
+    usados.sort();
+    setState(() => _prefijosUsados = usados);
+  }
 
   Future<Map<String, Map<String, int>>> _obtenerStockPorCodigo(
     List<String> prefijos,
@@ -53,12 +73,6 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
     }
 
     return resultado;
-  }
-
-  @override
-  void dispose() {
-    _nombreController.dispose();
-    super.dispose();
   }
 
   Future<void> _buscar() async {
@@ -104,12 +118,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
       }).toList();
     }
 
-    final prefijosActivos = [
-      if (_prefijo65) '65',
-      if (_prefijo66) '66',
-      if (_prefijo67) '67',
-      if (_prefijo68) '68',
-    ];
+    final prefijosActivos = _prefijosSeleccionados.toList();
 
     if (prefijosActivos.isNotEmpty) {
       final stockPorCodigo = await _obtenerStockPorCodigo(prefijosActivos);
@@ -276,8 +285,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                         child: GestureDetector(
                           onTap: () => setStateDialog(() => tipo = t),
                           child: Container(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 10),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
                             decoration: BoxDecoration(
                               color: tipo == t
                                   ? AppColors.primary
@@ -320,8 +328,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                           onTap: () =>
                               setStateDialog(() => idioma = i['value']!),
                           child: Container(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 10),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
                             decoration: BoxDecoration(
                               color: idioma == i['value']
                                   ? AppColors.primary
@@ -459,8 +466,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
           controller: _nombreController,
           decoration: InputDecoration(
             hintText: 'Buscar por nombre...',
-            prefixIcon:
-                const Icon(Icons.search, color: AppColors.primary),
+            prefixIcon: const Icon(Icons.search, color: AppColors.primary),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
@@ -469,36 +475,104 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: AppColors.primary, width: 2),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
             ),
           ),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildChip('Con stock', _conStock,
-                (v) => setState(() => _conStock = v)),
-            _buildChip('Sin stock', _sinStock,
-                (v) => setState(() => _sinStock = v)),
-            _buildChip('Etiquetas', _etiquetas,
-                (v) => setState(() => _etiquetas = v)),
-            _buildChip('Prospectos', _prospectos,
-                (v) => setState(() => _prospectos = v)),
-            _buildChip('Español', _espanol,
-                (v) => setState(() => _espanol = v)),
-            _buildChip('IN', _ingles, (v) => setState(() => _ingles = v)),
-            _buildChip('Código 65', _prefijo65,
-                (v) => setState(() => _prefijo65 = v)),
-            _buildChip('Código 66', _prefijo66,
-                (v) => setState(() => _prefijo66 = v)),
-            _buildChip('Código 67', _prefijo67,
-                (v) => setState(() => _prefijo67 = v)),
-            _buildChip('Código 68', _prefijo68,
-                (v) => setState(() => _prefijo68 = v)),
-          ],
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.primary),
+          ),
+          child: ExpansionTile(
+            title: const Text(
+              'Tipo y idioma',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+            iconColor: AppColors.primary,
+            collapsedIconColor: AppColors.primary,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildChip('Con stock', _conStock,
+                        (v) => setState(() => _conStock = v)),
+                    _buildChip('Sin stock', _sinStock,
+                        (v) => setState(() => _sinStock = v)),
+                    _buildChip('Etiquetas', _etiquetas,
+                        (v) => setState(() => _etiquetas = v)),
+                    _buildChip('Prospectos', _prospectos,
+                        (v) => setState(() => _prospectos = v)),
+                    _buildChip('Español', _espanol,
+                        (v) => setState(() => _espanol = v)),
+                    _buildChip('Inglés', _ingles,
+                        (v) => setState(() => _ingles = v)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.primary),
+          ),
+          child: ExpansionTile(
+            title: Text(
+              _prefijosSeleccionados.isEmpty
+                  ? 'Código'
+                  : 'Código: ${_prefijosSeleccionados.toList()..sort()}'.replaceAll('[', '').replaceAll(']', ''),
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+            iconColor: AppColors.primary,
+            collapsedIconColor: AppColors.primary,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: _prefijosUsados.isEmpty
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      )
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _prefijosUsados.map((p) {
+                          final seleccionado =
+                              _prefijosSeleccionados.contains(p);
+                          return _buildChip(
+                            'Código $p',
+                            seleccionado,
+                            (v) => setState(() {
+                              if (v) {
+                                _prefijosSeleccionados.add(p);
+                              } else {
+                                _prefijosSeleccionados.remove(p);
+                              }
+                            }),
+                          );
+                        }).toList(),
+                      ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -529,9 +603,6 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
 
   Widget _buildProductoItem(QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    final stockPorDestino = Map<String, dynamic>.from(
-      data['stockPorDestino'] ?? {},
-    );
 
     int stockMostrar;
     String? etiquetaCodigo;
@@ -545,7 +616,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
       stockMostrar = (data['stockActual'] as num?)?.toInt() ?? 0;
       etiquetaCodigo = null;
     }
-	
+
     final bajominimo = stockMostrar < 1000;
 
     return Container(
