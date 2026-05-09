@@ -21,18 +21,33 @@ class _ReportesScreenState extends State<ReportesScreen> {
   bool _etiquetas = false;
   bool _ingles = false;
   bool _espanol = false;
-  bool _prefijo65 = false;
-  bool _prefijo66 = false;
-  bool _prefijo67 = false;
-  bool _prefijo68 = false;
+  Set<String> _prefijosSeleccionados = {};
+  List<String> _prefijosUsados = [];
   bool _generando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarPrefijos();
+  }
+
+  Future<void> _cargarPrefijos() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('config')
+        .doc('prefijos')
+        .get();
+    final usados = (doc.data()?['usados'] ?? [])
+        .map((e) => e.toString())
+        .toList()
+        .cast<String>();
+    usados.sort();
+    setState(() => _prefijosUsados = usados);
+  }
 
   Future<Map<String, Map<String, int>>> _obtenerStockPorCodigo(
     List<String> prefijos,
   ) async {
-    // productoId -> { '65': cantidad, '66': cantidad, ... }
     final Map<String, Map<String, int>> resultado = {};
-
     final snapshot =
         await FirebaseFirestore.instance.collection('recepciones').get();
 
@@ -76,7 +91,6 @@ class _ReportesScreenState extends State<ReportesScreen> {
       final snapshot = await query.get();
       List<QueryDocumentSnapshot> docs = snapshot.docs;
 
-      // Filtro stock
       if (_conStock && !_sinStock) {
         docs = docs.where((d) {
           final data = d.data() as Map<String, dynamic>;
@@ -89,18 +103,11 @@ class _ReportesScreenState extends State<ReportesScreen> {
         }).toList();
       }
 
-      // Filtro por código
-      final prefijosActivos = [
-        if (_prefijo65) '65',
-        if (_prefijo66) '66',
-        if (_prefijo67) '67',
-        if (_prefijo68) '68',
-      ];
-
+      final prefijosActivos = _prefijosSeleccionados.toList();
       Map<String, Map<String, int>> stockPorCodigo = {};
+
       if (prefijosActivos.isNotEmpty) {
         stockPorCodigo = await _obtenerStockPorCodigo(prefijosActivos);
-        // Solo productos que tengan recepciones con esos prefijos
         docs = docs
             .where((d) => stockPorCodigo.containsKey(d.id))
             .toList();
@@ -207,8 +214,6 @@ class _ReportesScreenState extends State<ReportesScreen> {
                   ),
                   ...docs.map((doc) {
                     final data = doc.data() as Map<String, dynamic>;
-
-                    // Calcular stock a mostrar
                     int stockMostrar;
                     if (prefijosActivos.isNotEmpty &&
                         stockPorCodigo.containsKey(doc.id)) {
@@ -216,11 +221,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
                           .values
                           .fold(0, (sum, v) => sum + v);
                     } else {
-                      stockMostrar = (data['stockActual'] as num?)?.toInt() ?? 0;
+                      stockMostrar =
+                          (data['stockActual'] as num?)?.toInt() ?? 0;
                     }
-
                     final bajominimo = stockMostrar < 1000;
-
                     return pw.TableRow(
                       decoration: pw.BoxDecoration(
                         color: bajominimo
@@ -303,31 +307,101 @@ class _ReportesScreenState extends State<ReportesScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildChip('Con stock', _conStock,
-                              (v) => setState(() => _conStock = v)),
-                          _buildChip('Sin stock', _sinStock,
-                              (v) => setState(() => _sinStock = v)),
-                          _buildChip('Etiquetas', _etiquetas,
-                              (v) => setState(() => _etiquetas = v)),
-                          _buildChip('Prospectos', _prospectos,
-                              (v) => setState(() => _prospectos = v)),
-                          _buildChip('Español', _espanol,
-                              (v) => setState(() => _espanol = v)),
-                          _buildChip('Inglés', _ingles,
-                              (v) => setState(() => _ingles = v)),
-                          _buildChip('Código 65', _prefijo65,
-                              (v) => setState(() => _prefijo65 = v)),
-                          _buildChip('Código 66', _prefijo66,
-                              (v) => setState(() => _prefijo66 = v)),
-                          _buildChip('Código 67', _prefijo67,
-                              (v) => setState(() => _prefijo67 = v)),
-                          _buildChip('Código 68', _prefijo68,
-                              (v) => setState(() => _prefijo68 = v)),
-                        ],
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary),
+                        ),
+                        child: ExpansionTile(
+                          title: const Text(
+                            'Tipo y idioma',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          iconColor: AppColors.primary,
+                          collapsedIconColor: AppColors.primary,
+                          children: [
+                            Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _buildChip('Con stock', _conStock,
+                                      (v) => setState(() => _conStock = v)),
+                                  _buildChip('Sin stock', _sinStock,
+                                      (v) => setState(() => _sinStock = v)),
+                                  _buildChip('Etiquetas', _etiquetas,
+                                      (v) => setState(() => _etiquetas = v)),
+                                  _buildChip('Prospectos', _prospectos,
+                                      (v) => setState(() => _prospectos = v)),
+                                  _buildChip('Español', _espanol,
+                                      (v) => setState(() => _espanol = v)),
+                                  _buildChip('Inglés', _ingles,
+                                      (v) => setState(() => _ingles = v)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary),
+                        ),
+                        child: ExpansionTile(
+                          title: Text(
+                            _prefijosSeleccionados.isEmpty
+                                ? 'Código'
+                                : 'Código: ${(_prefijosSeleccionados.toList()..sort()).join(', ')}',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          iconColor: AppColors.primary,
+                          collapsedIconColor: AppColors.primary,
+                          children: [
+                            Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: _prefijosUsados.isEmpty
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.primary,
+                                      ),
+                                    )
+                                  : Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: _prefijosUsados.map((p) {
+                                        final seleccionado =
+                                            _prefijosSeleccionados.contains(p);
+                                        return _buildChip(
+                                          'Código $p',
+                                          seleccionado,
+                                          (v) => setState(() {
+                                            if (v) {
+                                              _prefijosSeleccionados.add(p);
+                                            } else {
+                                              _prefijosSeleccionados.remove(p);
+                                            }
+                                          }),
+                                        );
+                                      }).toList(),
+                                    ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 32),
                       SizedBox(

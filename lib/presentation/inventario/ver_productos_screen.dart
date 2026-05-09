@@ -44,7 +44,10 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
         .collection('config')
         .doc('prefijos')
         .get();
-    final usados = List<String>.from(doc.data()?['usados'] ?? []);
+    final usados = (doc.data()?['usados'] ?? [])
+    .map((e) => e.toString())
+    .toList()
+    .cast<String>();
     usados.sort();
     setState(() => _prefijosUsados = usados);
   }
