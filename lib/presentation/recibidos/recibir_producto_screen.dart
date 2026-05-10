@@ -652,7 +652,7 @@ if (!usados.contains(prefijo)) {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => context.go('/recibidos'),
+            onPressed: () => context.pop(),
           ),
           const SizedBox(width: 8),
           Text(

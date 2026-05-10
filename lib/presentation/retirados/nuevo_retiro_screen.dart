@@ -244,7 +244,7 @@ if (cantidadEntregada > stockDisponible) {
             backgroundColor: AppColors.primary,
           ),
         );
-        context.go('/retirados');
+        context.pop();
       }
     } catch (e) {
       setState(() => _error = 'Error al guardar: $e');
@@ -779,7 +779,7 @@ if (cantidadEntregada > stockDisponible) {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => context.go('/retirados'),
+            onPressed: () => context.pop(),
           ),
           const SizedBox(width: 8),
           Text(
