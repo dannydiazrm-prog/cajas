@@ -216,7 +216,10 @@ final prefijosDoc = await FirebaseFirestore.instance
     .collection('config')
     .doc('prefijos')
     .get();
-final usados = List<String>.from(prefijosDoc.data()?['usados'] ?? []);
+final usados = (prefijosDoc.data()?['usados'] ?? [])
+    .map((e) => e.toString())
+    .toList()
+    .cast<String>();
 if (!usados.contains(prefijo)) {
   batch.update(
     FirebaseFirestore.instance.collection('config').doc('prefijos'),
@@ -244,14 +247,14 @@ if (!usados.contains(prefijo)) {
           ),
         );
       }
-    } catch (e) {
+	  
+    }} catch (e) {
   setState(() => _guardando = false);
   if (mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Error: $e'),
+      const SnackBar(
+        content: Text('Error al guardar. Intentá de nuevo.'),
         backgroundColor: Colors.red,
-        duration: const Duration(seconds: 10),
       ),
     );
   }
