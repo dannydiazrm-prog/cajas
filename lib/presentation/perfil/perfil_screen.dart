@@ -304,7 +304,7 @@ Widget _buildHeader(BuildContext context) {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => context.pop(),
+            onPressed: () => context.go('/'),
           ),
           const SizedBox(width: 8),
           Expanded(

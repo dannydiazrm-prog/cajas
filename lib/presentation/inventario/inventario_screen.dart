@@ -35,7 +35,7 @@ class _Header extends StatelessWidget {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => context.pop(),
+            onPressed: () => context.go('/'),
           ),
           const SizedBox(width: 8),
           Text(
@@ -112,7 +112,7 @@ class _Body extends StatelessWidget {
       width: double.infinity,
       height: 80,
       child: ElevatedButton(
-        onPressed: () => context.go(button.route),
+        onPressed: () => context.push(button.route),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
