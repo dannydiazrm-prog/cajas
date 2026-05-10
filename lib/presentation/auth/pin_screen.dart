@@ -34,11 +34,21 @@ class _PinScreenState extends State<PinScreen> {
   Future<void> _validarPin() async {
     setState(() => _loading = true);
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('config')
-          .doc('pin')
-          .get();
-      final pinGuardado = doc.data()?['valor'] ?? '';
+      DocumentSnapshot doc;
+      try {
+        doc = await FirebaseFirestore.instance
+            .collection('config')
+            .doc('pin')
+            .get(const GetOptions(source: Source.serverAndCache));
+      } catch (e) {
+        doc = await FirebaseFirestore.instance
+            .collection('config')
+            .doc('pin')
+            .get(const GetOptions(source: Source.cache));
+      }
+      final pinGuardado = doc.data() != null
+          ? (doc.data() as Map<String, dynamic>)['valor'] ?? ''
+          : '';
       if (_pin == pinGuardado) {
         if (mounted) context.go('/');
       } else {
@@ -49,7 +59,7 @@ class _PinScreenState extends State<PinScreen> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Error de conexión';
+        _error = 'Sin conexión y sin datos en caché';
         _pin = '';
       });
     }
