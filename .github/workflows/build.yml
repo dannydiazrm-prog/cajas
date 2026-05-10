@@ -27,7 +27,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Build Web
-        run: flutter build web --release --base-href /etiquetas/ --web-renderer html
+        run: flutter build web --release --base-href /etiquetas/
 
       - name: Create .nojekyll
         run: touch build/web/.nojekyll
