@@ -38,15 +38,15 @@ class _Header extends StatelessWidget {
         children: [
           Image.asset(
             'assets/images/logo_galmedic.webp',
-            height: 60,
+            height: 80,
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               'DEPÓSITO DE ETIQUETAS',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: Breakpoints.isMobile(context) ? 20 : 28,
+                fontSize: Breakpoints.isMobile(context) ? 16 : 24,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.2,
               ),
@@ -104,7 +104,7 @@ class _Body extends StatelessWidget {
       width: double.infinity,
       height: 80,
       child: ElevatedButton(
-        onPressed: () => context.push(button.route),
+        onPressed: () => context.go(button.route),
         child: Text(
           button.label,
           style: const TextStyle(
