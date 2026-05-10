@@ -245,18 +245,18 @@ if (!usados.contains(prefijo)) {
         );
       }
     } catch (e) {
-      setState(() => _guardando = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al guardar. Intentá de nuevo.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  setState(() => _guardando = false);
+  if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error: $e'),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 10),
+      ),
+    );
   }
-
+}
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
