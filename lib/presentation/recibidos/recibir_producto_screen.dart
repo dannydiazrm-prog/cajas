@@ -171,11 +171,11 @@ if (destinosHabilitados.contains('todos')) {
 }
 
       final stockActualDestino =
-          (stockPorDestino[destinoClave] ?? 0) as int;
-      stockPorDestino[destinoClave] = stockActualDestino + cantidad;
+    (stockPorDestino[destinoClave] as num?)?.toInt() ?? 0;
+stockPorDestino[destinoClave] = stockActualDestino + cantidad;
 
-      final nuevoStockTotal = stockPorDestino.values
-          .fold<int>(0, (sum, v) => sum + (v as int));
+final nuevoStockTotal = stockPorDestino.values
+    .fold<int>(0, (sum, v) => sum + ((v as num).toInt()));
 
       final destinosActuales = List<String>.from(data['destinos'] ?? []);
       for (final d in destinosHabilitados) {
