@@ -123,14 +123,16 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
           _motivo == 'Otro' ? _otroController.text.trim() : _motivo!;
 
       await DataMaster().registrarAjuste(
-        productoId: data['id'] as String,
-		productoNombre: data['nombre'] as String,
-        tipoAjuste: _tipoAjuste!,
-		tipoProducto: data['tipo'] as String,
-        cantidad: cantidad,
-        motivo: motivoFinal,
-		idioma: data['idioma'],
-      );
+    tipo: 'ajuste_manual',
+    tipoAjuste: _tipoAjuste!,
+    productoId: data['id'] as String,
+    productoNombre: data['nombre'] as String,
+    tipoProducto: data['tipo'] as String,
+    idioma: data['idioma'] as String,
+    cantidad: cantidad,
+    motivo: motivoFinal,
+);
+
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
