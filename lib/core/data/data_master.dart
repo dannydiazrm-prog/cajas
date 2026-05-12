@@ -1346,4 +1346,12 @@ class DataMaster {
       );
     });
   }
-}
+
+  Future<String> obtenerPin() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('config')
+        .doc('pin')
+        .get();
+    return snap.data()?['valor']?.toString() ?? '1234'; 
+  }
+} // <--- ESTA ES LA ÚLTIMA LLAVE QUE CIERRA TODO EL ARCHIVO

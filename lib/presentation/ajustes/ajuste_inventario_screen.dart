@@ -124,6 +124,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
 
       await DataMaster().registrarAjuste(
         productoId: data['id'] as String,
+		productoNombre: data['nombre'] as String,
         tipoAjuste: _tipoAjuste!,
         cantidad: cantidad,
         motivo: motivoFinal,
