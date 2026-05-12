@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -8,12 +8,14 @@ class EliminarProductoScreen extends StatefulWidget {
   const EliminarProductoScreen({super.key});
 
   @override
-  State<EliminarProductoScreen> createState() => _EliminarProductoScreenState();
+  State<EliminarProductoScreen> createState() =>
+      _EliminarProductoScreenState();
 }
 
-class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
+class _EliminarProductoScreenState
+    extends State<EliminarProductoScreen> {
   final _nombreController = TextEditingController();
-  List<QueryDocumentSnapshot> _resultados = [];
+  List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
   bool _eliminando = false;
@@ -33,28 +35,22 @@ class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
       _buscado = false;
     });
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('productos')
-        .get();
-
-    final docs = snapshot.docs.where((d) {
-      final data = d.data() as Map<String, dynamic>;
-      return (data['nombre'] ?? '')
+    final todos = await DataMaster().obtenerProductos();
+    final filtrados = todos.where((p) {
+      return (p['nombre'] ?? '')
           .toString()
           .toLowerCase()
           .contains(nombre);
     }).toList();
 
     setState(() {
-      _resultados = docs;
+      _resultados = filtrados;
       _buscando = false;
       _buscado = true;
     });
   }
 
-  Future<void> _confirmarEliminacion(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>;
-
+  Future<void> _confirmarEliminacion(Map<String, dynamic> data) async {
     final confirmado1 = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -117,7 +113,6 @@ class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
 
     if (confirmado1 != true) return;
 
-    // Segunda confirmación
     final confirmado2 = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -150,82 +145,18 @@ class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
     );
 
     if (confirmado2 != true) return;
-    await _eliminarProductoCompleto(doc);
+    await _eliminarProductoCompleto(data);
   }
 
-  Future<void> _eliminarProductoCompleto(QueryDocumentSnapshot doc) async {
+  Future<void> _eliminarProductoCompleto(Map<String, dynamic> data) async {
     setState(() => _eliminando = true);
 
     try {
-      final productoId = doc.id;
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Borrar recepciones
-      final recepciones = await FirebaseFirestore.instance
-          .collection('recepciones')
-          .where('productoId', isEqualTo: productoId)
-          .get();
-      for (final r in recepciones.docs) {
-        batch.delete(r.reference);
-      }
-
-      // Borrar retiros
-      final retiros = await FirebaseFirestore.instance
-          .collection('retiros')
-          .where('productoId', isEqualTo: productoId)
-          .get();
-      for (final r in retiros.docs) {
-        batch.delete(r.reference);
-      }
-
-      // Borrar ajustes
-      final ajustes = await FirebaseFirestore.instance
-          .collection('ajustes')
-          .where('productoId', isEqualTo: productoId)
-          .get();
-      for (final a in ajustes.docs) {
-        batch.delete(a.reference);
-      }
-
-      // Borrar producto
-      batch.delete(
-        FirebaseFirestore.instance.collection('productos').doc(productoId),
-      );
-
-      // Limpiar prefijos huérfanos
-      final prefijosUsados = recepciones.docs
-          .map((r) {
-            final codigo = (r.data()['codigo'] ?? '').toString();
-            return codigo.length >= 2 ? codigo.substring(0, 2) : null;
-          })
-          .whereType<String>()
-          .toSet();
-
-      for (final prefijo in prefijosUsados) {
-        final otrasRecepciones = await FirebaseFirestore.instance
-            .collection('recepciones')
-            .where('productoId', isNotEqualTo: productoId)
-            .get();
-
-        final quedanConPrefijo = otrasRecepciones.docs.any((d) {
-          final c = (d.data()['codigo'] ?? '').toString();
-          return c.startsWith(prefijo);
-        });
-
-        if (!quedanConPrefijo) {
-          batch.update(
-            FirebaseFirestore.instance
-                .collection('config')
-                .doc('prefijos'),
-            {'usados': FieldValue.arrayRemove([prefijo])},
-          );
-        }
-      }
-
-      await batch.commit();
+      final productoId = data['id'] as String;
+      await DataMaster().eliminarProductoCompleto(productoId);
 
       setState(() {
-        _resultados.remove(doc);
+        _resultados.remove(data);
         _eliminando = false;
       });
 
@@ -268,10 +199,10 @@ class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.08),
+                        color: Colors.red.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8),
-                        border:
-                            Border.all(color: Colors.red.withOpacity(0.4)),
+                        border: Border.all(
+                            color: Colors.red.withValues(alpha: 0.4)),
                       ),
                       child: const Row(
                         children: [
@@ -373,8 +304,7 @@ class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
                             ),
                           ),
                         ),
-                      ..._resultados.map((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
+                      ..._resultados.map((data) {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(16),
@@ -382,7 +312,7 @@ class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Colors.red.withOpacity(0.3),
+                              color: Colors.red.withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(
@@ -409,9 +339,10 @@ class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
                                         _buildTag(data['idioma'] ?? ''),
                                         _buildTag(
                                           'Stock: ${data['stockActual'] ?? 0}',
-                                          color: (data['stockActual'] ?? 0) > 0
-                                              ? Colors.orange
-                                              : AppColors.primary,
+                                          color:
+                                              (data['stockActual'] ?? 0) > 0
+                                                  ? Colors.orange
+                                                  : AppColors.primary,
                                         ),
                                       ],
                                     ),
@@ -422,7 +353,7 @@ class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
                                 icon: const Icon(Icons.delete_forever,
                                     color: Colors.red, size: 28),
                                 onPressed: () =>
-                                    _confirmarEliminacion(doc),
+                                    _confirmarEliminacion(data),
                               ),
                             ],
                           ),
@@ -443,7 +374,7 @@ class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: (color ?? AppColors.primary).withOpacity(0.1),
+        color: (color ?? AppColors.primary).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

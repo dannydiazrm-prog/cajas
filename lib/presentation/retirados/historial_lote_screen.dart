@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -16,7 +16,7 @@ class HistorialLoteScreen extends StatefulWidget {
 
 class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
   final _loteController = TextEditingController();
-  List<QueryDocumentSnapshot> _resultados = [];
+  List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
   bool _generando = false;
@@ -36,15 +36,11 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
       _buscado = false;
     });
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('retiros')
-        .where('lote', isEqualTo: lote)
-        .get();
+    final docs = await DataMaster().obtenerRetiros(lote: lote);
 
-    final docs = snapshot.docs..sort((a, b) {
-      final fechaA = (a.data() as Map<String, dynamic>)['fecha'] as Timestamp?;
-      final fechaB = (b.data() as Map<String, dynamic>)['fecha'] as Timestamp?;
-      if (fechaA == null || fechaB == null) return 0;
+    docs.sort((a, b) {
+      final fechaA = DateTime.tryParse(a['fecha'] as String? ?? '') ?? DateTime(2000);
+      final fechaB = DateTime.tryParse(b['fecha'] as String? ?? '') ?? DateTime(2000);
       return fechaA.compareTo(fechaB);
     });
 
@@ -55,9 +51,10 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
     });
   }
 
-  String _formatFechaHora(Timestamp? ts) {
-    if (ts == null) return '-';
-    final fecha = ts.toDate();
+  String _formatFechaHora(String? fechaStr) {
+    if (fechaStr == null) return '-';
+    final fecha = DateTime.tryParse(fechaStr);
+    if (fecha == null) return '-';
     return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year} ${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
   }
 
@@ -77,8 +74,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
       int totalEntregado = 0;
       int totalConsumido = 0;
       int totalDevuelto = 0;
-      for (final doc in _resultados) {
-        final data = doc.data() as Map<String, dynamic>;
+      for (final data in _resultados) {
         totalEntregado += (data['cantidadEntregada'] ?? 0) as int;
         totalConsumido += (data['consumoReal'] ?? data['cantidadEntregada'] ?? 0) as int;
         totalDevuelto += (data['cantidadDevuelta'] ?? 0) as int;
@@ -165,10 +161,9 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                           ))
                       .toList(),
                 ),
-                ..._resultados.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final consumoReal = data['consumoReal'] ??
-                      data['cantidadEntregada'] ?? 0;
+                ..._resultados.map((data) {
+                  final consumoReal =
+                      data['consumoReal'] ?? data['cantidadEntregada'] ?? 0;
                   final estado = data['estado'] ?? 'pendiente';
                   return pw.TableRow(
                     decoration: pw.BoxDecoration(
@@ -184,7 +179,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                       (data['cantidadEntregada'] ?? 0).toString(),
                       consumoReal.toString(),
                       (data['cantidadDevuelta'] ?? 0).toString(),
-                      _formatFechaHora(data['fecha'] as Timestamp?),
+                      _formatFechaHora(data['fecha'] as String?),
                     ]
                         .map((v) => pw.Padding(
                               padding: const pw.EdgeInsets.all(6),
@@ -203,7 +198,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
               padding: const pw.EdgeInsets.all(12),
               decoration: pw.BoxDecoration(
                 border: pw.Border.all(color: PdfColor.fromHex('#0c6246')),
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                borderRadius:
+                    const pw.BorderRadius.all(pw.Radius.circular(4)),
               ),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -373,8 +369,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        ..._resultados.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
+                        ..._resultados.map((data) {
                           final estado = data['estado'] ?? 'pendiente';
                           final consumoReal = data['consumoReal'] ??
                               data['cantidadEntregada'] ?? 0;
@@ -387,7 +382,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: estado == 'cerrado'
-                                    ? AppColors.primary.withOpacity(0.3)
+                                    ? AppColors.primary.withValues(alpha: 0.3)
                                     : Colors.orange,
                                 width: estado == 'cerrado' ? 1 : 2,
                               ),
@@ -412,8 +407,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                                           horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: estado == 'cerrado'
-                                            ? Colors.green.withOpacity(0.1)
-                                            : Colors.orange.withOpacity(0.1),
+                                            ? Colors.green.withValues(alpha: 0.1)
+                                            : Colors.orange.withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
                                           color: estado == 'cerrado'
@@ -455,7 +450,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  _formatFechaHora(data['fecha'] as Timestamp?),
+                                  _formatFechaHora(data['fecha'] as String?),
                                   style: TextStyle(
                                     color: Colors.grey[500],
                                     fontSize: 11,
@@ -484,10 +479,10 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
     int cerrados = 0;
     int pendientes = 0;
 
-    for (final doc in _resultados) {
-      final data = doc.data() as Map<String, dynamic>;
+    for (final data in _resultados) {
       totalEntregado += (data['cantidadEntregada'] ?? 0) as int;
-      totalConsumido += (data['consumoReal'] ?? data['cantidadEntregada'] ?? 0) as int;
+      totalConsumido +=
+          (data['consumoReal'] ?? data['cantidadEntregada'] ?? 0) as int;
       totalDevuelto += (data['cantidadDevuelta'] ?? 0) as int;
       if (data['estado'] == 'cerrado') {
         cerrados++;
@@ -517,16 +512,21 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _buildResumenItem('ENTREGADO', totalEntregado.toString())),
-              Expanded(child: _buildResumenItem('CONSUMIDO', totalConsumido.toString())),
-              Expanded(child: _buildResumenItem('DEVUELTO', totalDevuelto.toString())),
+              Expanded(
+                  child: _buildResumenItem('ENTREGADO', totalEntregado.toString())),
+              Expanded(
+                  child: _buildResumenItem('CONSUMIDO', totalConsumido.toString())),
+              Expanded(
+                  child: _buildResumenItem('DEVUELTO', totalDevuelto.toString())),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: _buildResumenItem('CERRADOS', cerrados.toString())),
-              Expanded(child: _buildResumenItem('PENDIENTES', pendientes.toString())),
+              Expanded(
+                  child: _buildResumenItem('CERRADOS', cerrados.toString())),
+              Expanded(
+                  child: _buildResumenItem('PENDIENTES', pendientes.toString())),
               const Expanded(child: SizedBox()),
             ],
           ),
@@ -563,7 +563,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.08),
+        color: AppColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

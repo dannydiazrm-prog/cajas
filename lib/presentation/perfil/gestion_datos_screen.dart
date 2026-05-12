@@ -25,9 +25,10 @@ class GestionDatosScreen extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.08),
+                          color: Colors.red.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withOpacity(0.4)),
+                          border: Border.all(
+                              color: Colors.red.withValues(alpha: 0.4)),
                         ),
                         child: const Row(
                           children: [
@@ -104,8 +105,8 @@ class GestionDatosScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: peligroso
-                ? Colors.red.withOpacity(0.5)
-                : AppColors.primary.withOpacity(0.3),
+                ? Colors.red.withValues(alpha: 0.5)
+                : AppColors.primary.withValues(alpha: 0.3),
             width: peligroso ? 1.5 : 1,
           ),
         ),
@@ -115,8 +116,8 @@ class GestionDatosScreen extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: peligroso
-                    ? Colors.red.withOpacity(0.1)
-                    : AppColors.primary.withOpacity(0.1),
+                    ? Colors.red.withValues(alpha: 0.1)
+                    : AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(

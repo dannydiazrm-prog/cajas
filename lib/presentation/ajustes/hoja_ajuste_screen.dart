@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -13,10 +13,10 @@ class HojaAjusteScreen extends StatefulWidget {
 
 class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
   final _busquedaController = TextEditingController();
-  List<QueryDocumentSnapshot> _resultados = [];
+  List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
-  QueryDocumentSnapshot? _retiroSeleccionado;
+  Map<String, dynamic>? _retiroSeleccionado;
 
   // Formulario
   final _cantidadController = TextEditingController();
@@ -48,57 +48,36 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
       _buscando = true;
       _buscado = false;
       _retiroSeleccionado = null;
+      _error = '';
     });
 
     try {
-
       final textoUpper = texto.toUpperCase();
-      final textoCapitalizado =
-          texto.isNotEmpty ? texto[0].toUpperCase() + texto.substring(1) : texto;
+      final textoLower = texto.toLowerCase();
 
-      // Buscar por lote (siempre en mayúsculas)
-      final porLote = await FirebaseFirestore.instance
-          .collection('retiros')
-          .where('lote', isEqualTo: textoUpper)
-          .get();
+      // Buscar todos los retiros y filtrar localmente por lote o compañero
+      final todos = await DataMaster().obtenerRetiros();
 
-      // Buscar por compañero — texto original
-      final porCompaneroOriginal = await FirebaseFirestore.instance
-          .collection('retiros')
-          .where('companero', isEqualTo: texto)
-          .get();
-
-      // Buscar por compañero — capitalizado (por si lo guardaron con mayúscula)
-      final porCompaneroCapitalizado = textoCapitalizado != texto
-          ? await FirebaseFirestore.instance
-              .collection('retiros')
-              .where('companero', isEqualTo: textoCapitalizado)
-              .get()
-          : null;
-
-      // Combinar y deduplicar
       final ids = <String>{};
-      final docs = <QueryDocumentSnapshot>[];
+      final docs = <Map<String, dynamic>>[];
 
-      for (final doc in [
-        ...porLote.docs,
-        ...porCompaneroOriginal.docs,
-        if (porCompaneroCapitalizado != null)
-          ...porCompaneroCapitalizado.docs,
-      ]) {
-        if (ids.add(doc.id)) {
+      for (final doc in todos) {
+        final lote = (doc['lote'] ?? '').toString().toUpperCase();
+        final companero = (doc['companero'] ?? '').toString().toLowerCase();
+        final id = doc['id'] as String? ?? '';
+
+        if ((lote == textoUpper || companero.contains(textoLower)) &&
+            ids.add(id)) {
           docs.add(doc);
         }
       }
 
-      // Ordenar por fecha descendente en el cliente
+      // Ordenar por fecha descendente
       docs.sort((a, b) {
-        final dataA = a.data() as Map<String, dynamic>;
-        final dataB = b.data() as Map<String, dynamic>;
         final fechaA =
-            (dataA['fecha'] as Timestamp?)?.toDate() ?? DateTime(2000);
+            DateTime.tryParse(a['fecha'] as String? ?? '') ?? DateTime(2000);
         final fechaB =
-            (dataB['fecha'] as Timestamp?)?.toDate() ?? DateTime(2000);
+            DateTime.tryParse(b['fecha'] as String? ?? '') ?? DateTime(2000);
         return fechaB.compareTo(fechaA);
       });
 
@@ -132,16 +111,13 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
       return;
     }
 
-    final data = _retiroSeleccionado!.data() as Map<String, dynamic>;
-    final productoId = data['productoId'];
+    final data = _retiroSeleccionado!;
+    final productoId = data['productoId'] as String;
 
-    // Verificar stock
-    final productoDoc = await FirebaseFirestore.instance
-        .collection('productos')
-        .doc(productoId)
-        .get();
+    // Verificar stock actual
+    final producto = await DataMaster().obtenerProductoPorId(productoId);
     final stockActual =
-        ((productoDoc.data()?['stockActual'] ?? 0) as num).toInt();
+        ((producto?['stockActual'] ?? 0) as num).toInt();
 
     if (cantidad > stockActual) {
       setState(
@@ -157,33 +133,13 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     try {
       final motivoFinal =
           _motivo == 'Otro' ? _otroController.text.trim() : _motivo!;
-      final batch = FirebaseFirestore.instance.batch();
 
-      // Descontar stock
-      batch.update(
-        FirebaseFirestore.instance.collection('productos').doc(productoId),
-        {'stockActual': stockActual - cantidad},
+      await DataMaster().registrarHojaAjuste(
+        productoId: productoId,
+        retiroId: data['id'] as String,
+        cantidad: cantidad,
+        motivo: motivoFinal,
       );
-
-      // Registrar ajuste
-      batch.set(
-        FirebaseFirestore.instance.collection('ajustes').doc(),
-        {
-          'tipo': 'hoja_ajuste',
-          'productoId': productoId,
-          'productoNombre': data['productoNombre'],
-          'tipoProducto': data['tipo'],
-          'idioma': data['idioma'],
-          'retiroId': _retiroSeleccionado!.id,
-          'lote': data['lote'],
-          'companero': data['companero'],
-          'cantidad': cantidad,
-          'motivo': motivoFinal,
-          'fecha': FieldValue.serverTimestamp(),
-        },
-      );
-
-      await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -201,9 +157,10 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     if (mounted) setState(() => _guardando = false);
   }
 
-  String _formatFechaHora(Timestamp? ts) {
-    if (ts == null) return '-';
-    final fecha = ts.toDate();
+  String _formatFechaHora(String? fechaStr) {
+    if (fechaStr == null) return '-';
+    final fecha = DateTime.tryParse(fechaStr);
+    if (fecha == null) return '-';
     return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year} ${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
   }
 
@@ -300,7 +257,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
           ],
         ),
         const SizedBox(height: 24),
-        if (_error.isNotEmpty) ...[
+        if (_error.isNotEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -318,7 +275,6 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
               ),
             ),
           ),
-        ],
         if (_buscado && _resultados.isEmpty && _error.isEmpty)
           const Center(
             child: Text(
@@ -329,14 +285,13 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
               ),
             ),
           ),
-        ..._resultados.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+        ..._resultados.map((data) {
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () => setState(() {
-                _retiroSeleccionado = doc;
+                _retiroSeleccionado = data;
                 _error = '';
               }),
               child: Container(
@@ -378,8 +333,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _formatFechaHora(
-                                data['fecha'] as Timestamp?),
+                            _formatFechaHora(data['fecha'] as String?),
                             style: TextStyle(
                               color: Colors.grey[500],
                               fontSize: 11,
@@ -404,12 +358,11 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
   }
 
   Widget _buildFormulario() {
-    final data = _retiroSeleccionado!.data() as Map<String, dynamic>;
+    final data = _retiroSeleccionado!;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Retiro seleccionado
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -444,8 +397,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                       spacing: 8,
                       children: [
                         _buildTagBlanco('📦 ${data['lote'] ?? ''}'),
-                        _buildTagBlanco(
-                            '👤 ${data['companero'] ?? ''}'),
+                        _buildTagBlanco('👤 ${data['companero'] ?? ''}'),
                         _buildTagBlanco(
                             '📤 ${data['cantidadEntregada'] ?? 0} entregadas'),
                       ],
@@ -465,7 +417,6 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Cantidad a reponer
         const Text(
           'CANTIDAD A REPONER',
           style: TextStyle(
@@ -496,7 +447,6 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Motivo
         const Text(
           'MOTIVO',
           style: TextStyle(
@@ -519,17 +469,15 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color:
-                      seleccionado ? AppColors.primary : Colors.white,
+                  color: seleccionado ? AppColors.primary : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: AppColors.primary),
                 ),
                 child: Text(
                   m,
                   style: TextStyle(
-                    color: seleccionado
-                        ? Colors.white
-                        : AppColors.primary,
+                    color:
+                        seleccionado ? Colors.white : AppColors.primary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -547,8 +495,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
               fillColor: Colors.white,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide:
-                    const BorderSide(color: AppColors.primary),
+                borderSide: const BorderSide(color: AppColors.primary),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),

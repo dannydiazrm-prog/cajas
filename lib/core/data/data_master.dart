@@ -972,6 +972,326 @@ class DataMaster {
     final usados = await obtenerPrefijosUsados();
     await FirebaseFirestore.instance.collection('config').doc('prefijos').update({
       'usados': usados,
+	  
+	  // ─────────────────────────────────────────
+// GESTIÓN DE RECEPCIONES
+// ─────────────────────────────────────────
+
+Future<bool> eliminarRecepcion(String recepcionId) async {
+  final database = await db;
+
+  // Obtener la recepción
+  final rows = await database.query(
+    'recepciones',
+    where: 'id = ?',
+    whereArgs: [recepcionId],
+  );
+  if (rows.isEmpty) return false;
+  final recepcion = rows.first;
+
+  final productoId = recepcion['productoId'] as String?;
+  final cantidad = (recepcion['cantidad'] as num?)?.toInt() ?? 0;
+  final destinoClave = recepcion['destinoClave'] as String? ?? 'todos';
+  final codigo = (recepcion['codigo'] ?? '').toString();
+
+  if (productoId == null) return false;
+
+  // Verificar retiros posteriores
+  final retirosFecha = recepcion['fecha'] as String?;
+  final retirosPosteriores = await database.rawQuery(
+    'SELECT COUNT(*) as count FROM retiros WHERE productoId = ? AND fecha >= ?',
+    [productoId, retirosFecha ?? ''],
+  );
+  final cantidadRetiros = (retirosPosteriores.first['count'] as int?) ?? 0;
+  if (cantidadRetiros > 0) return false; // bloqueado por integridad
+
+  final producto = await obtenerProductoPorId(productoId);
+  if (producto == null) return false;
+
+  final stockPorDestino =
+      Map<String, dynamic>.from(producto['stockPorDestino'] ?? {});
+  final stockActualDestino =
+      (stockPorDestino[destinoClave] as num?)?.toInt() ?? 0;
+  stockPorDestino[destinoClave] =
+      (stockActualDestino - cantidad).clamp(0, double.maxFinite).toInt();
+
+  final nuevoStockTotal = stockPorDestino.values
+      .fold<int>(0, (sum, v) => sum + ((v as num).toInt()));
+
+  await database.transaction((txn) async {
+    await txn.delete('recepciones', where: 'id = ?', whereArgs: [recepcionId]);
+    await txn.update(
+      'productos',
+      {
+        'stockActual': nuevoStockTotal,
+        'stockPorDestino': jsonEncode(stockPorDestino),
+        'sincronizado': 0,
+      },
+      where: 'id = ?',
+      whereArgs: [productoId],
+    );
+  });
+
+  // Limpiar prefijo si no quedan más recepciones con ese código
+  if (codigo.length >= 2) {
+    final prefijo = codigo.substring(0, 2);
+    final otras = await database.query(
+      'recepciones',
+      where: 'productoId = ? AND id != ?',
+      whereArgs: [productoId, recepcionId],
+    );
+    final quedanConPrefijo =
+        otras.any((r) => (r['codigo'] as String? ?? '').startsWith(prefijo));
+    if (!quedanConPrefijo) {
+      final usados = await obtenerPrefijosUsados();
+      usados.remove(prefijo);
+      await guardarConfig('prefijos_usados', jsonEncode(usados));
+    }
+  }
+
+  return true;
+}
+
+Future<bool> editarCantidadRecepcion({
+  required String recepcionId,
+  required int nuevaCantidad,
+}) async {
+  final database = await db;
+
+  final rows = await database.query(
+    'recepciones',
+    where: 'id = ?',
+    whereArgs: [recepcionId],
+  );
+  if (rows.isEmpty) return false;
+  final recepcion = rows.first;
+
+  final productoId = recepcion['productoId'] as String?;
+  final cantidadOriginal = (recepcion['cantidad'] as num?)?.toInt() ?? 0;
+  final destinoClave = recepcion['destinoClave'] as String? ?? 'todos';
+
+  if (productoId == null) return false;
+
+  final diferencia = nuevaCantidad - cantidadOriginal;
+
+  final producto = await obtenerProductoPorId(productoId);
+  if (producto == null) return false;
+
+  final stockPorDestino =
+      Map<String, dynamic>.from(producto['stockPorDestino'] ?? {});
+  final stockActualDestino =
+      (stockPorDestino[destinoClave] as num?)?.toInt() ?? 0;
+  stockPorDestino[destinoClave] =
+      (stockActualDestino + diferencia).clamp(0, double.maxFinite).toInt();
+
+  final nuevoStockTotal = stockPorDestino.values
+      .fold<int>(0, (sum, v) => sum + ((v as num).toInt()));
+
+  await database.transaction((txn) async {
+    await txn.update(
+      'recepciones',
+      {'cantidad': nuevaCantidad},
+      where: 'id = ?',
+      whereArgs: [recepcionId],
+    );
+    await txn.update(
+      'productos',
+      {
+        'stockActual': nuevoStockTotal,
+        'stockPorDestino': jsonEncode(stockPorDestino),
+        'sincronizado': 0,
+      },
+      where: 'id = ?',
+      whereArgs: [productoId],
+    );
+  });
+
+  return true;
+}
+
+// ─────────────────────────────────────────
+// GESTIÓN DE AJUSTES
+// ─────────────────────────────────────────
+
+Future<bool> eliminarAjuste(String ajusteId) async {
+  final database = await db;
+
+  final rows = await database.query(
+    'ajustes',
+    where: 'id = ?',
+    whereArgs: [ajusteId],
+  );
+  if (rows.isEmpty) return false;
+  final ajuste = rows.first;
+
+  final productoId = ajuste['productoId'] as String?;
+  final stockAnterior = (ajuste['stockAnterior'] as num?)?.toInt();
+  final tipoAjuste = ajuste['tipoAjuste'] as String? ?? 'entrada';
+  final fechaAjuste = ajuste['fecha'] as String?;
+
+  if (productoId == null || stockAnterior == null) return false;
+
+  // Bloquear si es entrada y hubo retiros posteriores
+  if (tipoAjuste == 'entrada') {
+    final retirosPosteriores = await database.rawQuery(
+      'SELECT COUNT(*) as count FROM retiros WHERE productoId = ? AND fecha >= ?',
+      [productoId, fechaAjuste ?? ''],
+    );
+    final cantidad = (retirosPosteriores.first['count'] as int?) ?? 0;
+    if (cantidad > 0) return false;
+  }
+
+  await database.transaction((txn) async {
+    await txn.delete('ajustes', where: 'id = ?', whereArgs: [ajusteId]);
+    await txn.update(
+      'productos',
+      {'stockActual': stockAnterior, 'sincronizado': 0},
+      where: 'id = ?',
+      whereArgs: [productoId],
+    );
+  });
+
+  return true;
+}
+
+Future<bool> editarCantidadAjuste({
+  required String ajusteId,
+  required int nuevaCantidad,
+}) async {
+  final database = await db;
+
+  final rows = await database.query(
+    'ajustes',
+    where: 'id = ?',
+    whereArgs: [ajusteId],
+  );
+  if (rows.isEmpty) return false;
+  final ajuste = rows.first;
+
+  final productoId = ajuste['productoId'] as String?;
+  final stockAnterior = (ajuste['stockAnterior'] as num?)?.toInt() ?? 0;
+  final tipoAjuste = ajuste['tipoAjuste'] as String? ?? 'entrada';
+
+  if (productoId == null) return false;
+
+  final nuevoStock = tipoAjuste == 'entrada'
+      ? stockAnterior + nuevaCantidad
+      : (stockAnterior - nuevaCantidad).clamp(0, double.maxFinite).toInt();
+
+  await database.transaction((txn) async {
+    await txn.update(
+      'ajustes',
+      {'cantidad': nuevaCantidad, 'stockNuevo': nuevoStock},
+      where: 'id = ?',
+      whereArgs: [ajusteId],
+    );
+    await txn.update(
+      'productos',
+      {'stockActual': nuevoStock, 'sincronizado': 0},
+      where: 'id = ?',
+      whereArgs: [productoId],
+    );
+  });
+
+  return true;
+}
+
+// ─────────────────────────────────────────
+// ELIMINAR PRODUCTO COMPLETO
+// ─────────────────────────────────────────
+
+Future<void> eliminarProductoCompleto(String productoId) async {
+  final database = await db;
+
+  // Obtener prefijos de las recepciones antes de borrar
+  final recepciones = await database.query(
+    'recepciones',
+    where: 'productoId = ?',
+    whereArgs: [productoId],
+  );
+
+  final prefijosUsados = recepciones
+      .map((r) {
+        final codigo = (r['codigo'] ?? '').toString();
+        return codigo.length >= 2 ? codigo.substring(0, 2) : null;
+      })
+      .whereType<String>()
+      .toSet();
+
+  await database.transaction((txn) async {
+    await txn.delete('recepciones',
+        where: 'productoId = ?', whereArgs: [productoId]);
+    await txn.delete('retiros',
+        where: 'productoId = ?', whereArgs: [productoId]);
+    await txn.delete('ajustes',
+        where: 'productoId = ?', whereArgs: [productoId]);
+    await txn.delete('productos',
+        where: 'id = ?', whereArgs: [productoId]);
+  });
+
+  // Limpiar prefijos huérfanos
+  for (final prefijo in prefijosUsados) {
+    final otras = await database.rawQuery(
+      'SELECT COUNT(*) as count FROM recepciones WHERE codigo LIKE ?',
+      ['$prefijo%'],
+    );
+    final quedan = (otras.first['count'] as int?) ?? 0;
+    if (quedan == 0) {
+      final usados = await obtenerPrefijosUsados();
+      usados.remove(prefijo);
+      await guardarConfig('prefijos_usados', jsonEncode(usados));
+    }
+  }
+}
+
+Future<void> registrarHojaAjuste({
+  required String productoId,
+  required String retiroId,
+  required int cantidad,
+  required String motivo,
+}) async {
+  final producto = await obtenerProductoPorId(productoId);
+  if (producto == null) throw Exception('Producto no encontrado');
+
+  final stockAnterior = (producto['stockActual'] as num).toInt();
+  final nuevoStock = (stockAnterior - cantidad).clamp(0, double.maxFinite).toInt();
+
+  final retiros = await obtenerRetiros();
+  final retiro = retiros.firstWhere(
+    (r) => r['id'] == retiroId,
+    orElse: () => {},
+  );
+
+  final database = await db;
+  final id = 'local_${DateTime.now().millisecondsSinceEpoch}';
+
+  await database.transaction((txn) async {
+    await txn.insert('ajustes', {
+      'id': id,
+      'tipo': 'hoja_ajuste',
+      'tipoAjuste': 'resta',
+      'productoId': productoId,
+      'productoNombre': producto['nombre'],
+      'tipo_producto': producto['tipo'],
+      'idioma': producto['idioma'],
+      'retiroId': retiroId,
+      'lote': retiro['lote'] ?? '',
+      'companero': retiro['companero'] ?? '',
+      'cantidad': cantidad,
+      'stockAnterior': stockAnterior,
+      'stockNuevo': nuevoStock,
+      'motivo': motivo,
+      'fecha': DateTime.now().toIso8601String(),
+      'sincronizado': 0,
+    });
+    await txn.update(
+      'productos',
+      {'stockActual': nuevoStock, 'sincronizado': 0},
+      where: 'id = ?',
+      whereArgs: [productoId],
+    );
+  });
+}
     });
   }
 }

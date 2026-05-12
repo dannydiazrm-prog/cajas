@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 
 class PinScreen extends StatefulWidget {
@@ -34,21 +34,7 @@ class _PinScreenState extends State<PinScreen> {
   Future<void> _validarPin() async {
     setState(() => _loading = true);
     try {
-      DocumentSnapshot doc;
-      try {
-        doc = await FirebaseFirestore.instance
-            .collection('config')
-            .doc('pin')
-            .get(const GetOptions(source: Source.serverAndCache));
-      } catch (e) {
-        doc = await FirebaseFirestore.instance
-            .collection('config')
-            .doc('pin')
-            .get(const GetOptions(source: Source.cache));
-      }
-      final pinGuardado = doc.data() != null
-          ? (doc.data() as Map<String, dynamic>)['valor'] ?? ''
-          : '';
+      final pinGuardado = await DataMaster().leerConfig('pin') ?? '';
       if (_pin == pinGuardado) {
         if (mounted) context.go('/');
       } else {
@@ -59,7 +45,7 @@ class _PinScreenState extends State<PinScreen> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Sin conexión y sin datos en caché';
+        _error = 'Error al validar el PIN';
         _pin = '';
       });
     }
@@ -110,7 +96,9 @@ class _PinScreenState extends State<PinScreen> {
                         height: 20,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: lleno ? AppColors.primary : Colors.transparent,
+                          color: lleno
+                              ? AppColors.primary
+                              : Colors.transparent,
                           border: Border.all(
                             color: AppColors.primary,
                             width: 2,
@@ -178,7 +166,7 @@ class _Teclado extends StatelessWidget {
                       tecla == 'DEL' ? onBorrar() : onKey(tecla),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: tecla == 'DEL'
-                        ? AppColors.primary.withOpacity(0.6)
+                        ? AppColors.primary.withValues(alpha: 0.6)
                         : AppColors.primary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

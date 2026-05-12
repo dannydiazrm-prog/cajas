@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -16,7 +16,7 @@ class RetirosDiaScreen extends StatefulWidget {
 
 class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
   bool _generando = false;
-  List<QueryDocumentSnapshot> _retiros = [];
+  List<Map<String, dynamic>> _retiros = [];
   bool _cargando = true;
 
   @override
@@ -28,27 +28,32 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
   Future<void> _cargarHoy() async {
     final ahora = DateTime.now();
     final inicioDia = DateTime(ahora.year, ahora.month, ahora.day);
-    final finDia =
-        DateTime(ahora.year, ahora.month, ahora.day, 23, 59, 59);
+    final finDia = DateTime(ahora.year, ahora.month, ahora.day, 23, 59, 59);
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('retiros')
-        .where('fecha',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(inicioDia))
-        .where('fecha',
-            isLessThanOrEqualTo: Timestamp.fromDate(finDia))
-        .orderBy('fecha', descending: false)
-        .get();
+    final retiros = await DataMaster().obtenerRetiros(
+      desde: inicioDia,
+      hasta: finDia,
+    );
 
-    setState(() {
-      _retiros = snapshot.docs;
-      _cargando = false;
+    // Ordenar por fecha ascendente para el reporte del día
+    retiros.sort((a, b) {
+      final fechaA = DateTime.tryParse(a['fecha'] as String? ?? '') ?? DateTime(2000);
+      final fechaB = DateTime.tryParse(b['fecha'] as String? ?? '') ?? DateTime(2000);
+      return fechaA.compareTo(fechaB);
     });
+
+    if (mounted) {
+      setState(() {
+        _retiros = retiros;
+        _cargando = false;
+      });
+    }
   }
 
-  String _formatHora(Timestamp? ts) {
-    if (ts == null) return '-';
-    final fecha = ts.toDate();
+  String _formatHora(String? fechaStr) {
+    if (fechaStr == null) return '-';
+    final fecha = DateTime.tryParse(fechaStr);
+    if (fecha == null) return '-';
     return '${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
   }
 
@@ -152,11 +157,10 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
                             ))
                         .toList(),
                   ),
-                  ..._retiros.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
+                  ..._retiros.map((data) {
                     return pw.TableRow(
                       children: [
-                        _formatHora(data['fecha'] as Timestamp?),
+                        _formatHora(data['fecha'] as String?),
                         data['productoNombre'] ?? '',
                         data['tipo'] ?? '',
                         data['idioma'] ?? '',
@@ -169,8 +173,7 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
                                 padding: const pw.EdgeInsets.all(6),
                                 child: pw.Text(
                                   v,
-                                  style:
-                                      const pw.TextStyle(fontSize: 9),
+                                  style: const pw.TextStyle(fontSize: 9),
                                 ),
                               ))
                           .toList(),
@@ -240,9 +243,7 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
                   if (_retiros.isNotEmpty)
                     ElevatedButton.icon(
                       onPressed: _generando ? null : _generarPDF,
-                      icon: const Icon(
-                          Icons.picture_as_pdf_outlined,
-                          size: 18),
+                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
                       label: _generando
                           ? const SizedBox(
                               width: 16,
@@ -281,14 +282,11 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: _retiros.length,
                       itemBuilder: (context, index) {
-                        final data = _retiros[index].data()
-                            as Map<String, dynamic>;
-                        final hora = _formatHora(
-                            data['fecha'] as Timestamp?);
+                        final data = _retiros[index];
+                        final hora = _formatHora(data['fecha'] as String?);
                         final estado = data['estado'] ?? 'pendiente';
 
                         return Container(
@@ -299,14 +297,13 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: estado == 'cerrado'
-                                  ? AppColors.primary.withOpacity(0.3)
+                                  ? AppColors.primary.withValues(alpha: 0.3)
                                   : Colors.orange,
                               width: estado == 'cerrado' ? 1 : 2,
                             ),
                           ),
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
@@ -315,8 +312,7 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
                                         horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: AppColors.primary,
-                                      borderRadius:
-                                          BorderRadius.circular(6),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
                                       hora,
@@ -343,12 +339,9 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
                                         horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: estado == 'cerrado'
-                                          ? Colors.green
-                                              .withOpacity(0.1)
-                                          : Colors.orange
-                                              .withOpacity(0.1),
-                                      borderRadius:
-                                          BorderRadius.circular(6),
+                                          ? Colors.green.withValues(alpha: 0.1)
+                                          : Colors.orange.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
                                       border: Border.all(
                                         color: estado == 'cerrado'
                                             ? Colors.green
@@ -356,9 +349,7 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
                                       ),
                                     ),
                                     child: Text(
-                                      estado == 'cerrado'
-                                          ? 'CERRADO'
-                                          : 'PENDIENTE',
+                                      estado == 'cerrado' ? 'CERRADO' : 'PENDIENTE',
                                       style: TextStyle(
                                         color: estado == 'cerrado'
                                             ? Colors.green
@@ -377,14 +368,10 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
                                 children: [
                                   _buildTag(data['tipo'] ?? ''),
                                   _buildTag(data['idioma'] ?? ''),
-                                  _buildTag(
-                                      '📤 ${data['cantidadEntregada'] ?? 0}'),
-                                  _buildTag(
-                                      '👤 ${data['companero'] ?? ''}'),
-                                  _buildTag(
-                                      '📦 ${data['lote'] ?? ''}'),
-                                  _buildTag(
-                                      '🌍 ${data['destino'] ?? ''}'),
+                                  _buildTag('📤 ${data['cantidadEntregada'] ?? 0}'),
+                                  _buildTag('👤 ${data['companero'] ?? ''}'),
+                                  _buildTag('📦 ${data['lote'] ?? ''}'),
+                                  _buildTag('🌍 ${data['destino'] ?? ''}'),
                                 ],
                               ),
                             ],
@@ -401,10 +388,9 @@ class _RetirosDiaScreenState extends State<RetirosDiaScreen> {
 
   Widget _buildTag(String label) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.08),
+        color: AppColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

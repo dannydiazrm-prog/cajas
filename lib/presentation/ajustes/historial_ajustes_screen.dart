@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -20,7 +20,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
   bool _ajusteInventario = false;
   DateTime? _desde;
   DateTime? _hasta;
-  List<QueryDocumentSnapshot> _resultados = [];
+  List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
   bool _generando = false;
@@ -42,37 +42,32 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
   }
 
   Future<void> _ejecutarBusqueda() async {
-    Query query = FirebaseFirestore.instance
-        .collection('ajustes')
-        .orderBy('fecha', descending: true);
+    setState(() => _buscando = true);
 
-    if (_desde != null) {
-      query = query.where('fecha',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(_desde!));
-    }
-    if (_hasta != null) {
-      query = query.where('fecha',
-          isLessThanOrEqualTo: Timestamp.fromDate(_hasta!));
-    }
+    final docs = await DataMaster().obtenerAjustes(
+      desde: _desde,
+      hasta: _hasta,
+    );
 
-    final snapshot = await query.get();
-    List<QueryDocumentSnapshot> docs = snapshot.docs;
-
+    List<Map<String, dynamic>> filtrados = docs;
     if (_hojaAjuste && !_ajusteInventario) {
-      docs = docs
-          .where((d) =>
-              (d.data() as Map<String, dynamic>)['tipo'] == 'hoja_ajuste')
-          .toList();
+      filtrados = docs.where((d) => d['tipo'] == 'hoja_ajuste').toList();
     } else if (_ajusteInventario && !_hojaAjuste) {
-      docs = docs
-          .where((d) =>
-              (d.data() as Map<String, dynamic>)['tipo'] ==
-              'ajuste_inventario')
-          .toList();
+      filtrados =
+          docs.where((d) => d['tipo'] == 'ajuste_inventario').toList();
     }
+
+    // Ordenar por fecha descendente
+    filtrados.sort((a, b) {
+      final fechaA =
+          DateTime.tryParse(a['fecha'] as String? ?? '') ?? DateTime(2000);
+      final fechaB =
+          DateTime.tryParse(b['fecha'] as String? ?? '') ?? DateTime(2000);
+      return fechaB.compareTo(fechaA);
+    });
 
     setState(() {
-      _resultados = docs;
+      _resultados = filtrados;
       _buscando = false;
       _buscado = true;
     });
@@ -86,9 +81,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
       lastDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.primary,
-          ),
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
         ),
         child: child!,
       ),
@@ -98,8 +91,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
         if (esDesde) {
           _desde = DateTime(fecha.year, fecha.month, fecha.day);
         } else {
-          _hasta =
-              DateTime(fecha.year, fecha.month, fecha.day, 23, 59, 59);
+          _hasta = DateTime(fecha.year, fecha.month, fecha.day, 23, 59, 59);
         }
       });
     }
@@ -110,9 +102,10 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
     return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year}';
   }
 
-  String _formatFechaHora(Timestamp? ts) {
-    if (ts == null) return '-';
-    final fecha = ts.toDate();
+  String _formatFechaHora(String? fechaStr) {
+    if (fechaStr == null) return '-';
+    final fecha = DateTime.tryParse(fechaStr);
+    if (fecha == null) return '-';
     return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year} ${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
   }
 
@@ -216,8 +209,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                             ))
                         .toList(),
                   ),
-                  ..._resultados.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
+                  ..._resultados.map((data) {
                     final tipoAjuste = data['tipoAjuste'] ?? '-';
                     return pw.TableRow(
                       children: [
@@ -227,14 +219,13 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                         (data['cantidad'] ?? 0).toString(),
                         data['motivo'] ?? '',
                         data['companero'] ?? '-',
-                        _formatFechaHora(data['fecha'] as Timestamp?),
+                        _formatFechaHora(data['fecha'] as String?),
                       ]
                           .map((v) => pw.Padding(
                                 padding: const pw.EdgeInsets.all(6),
                                 child: pw.Text(
                                   v,
-                                  style:
-                                      const pw.TextStyle(fontSize: 9),
+                                  style: const pw.TextStyle(fontSize: 9),
                                 ),
                               ))
                           .toList(),
@@ -337,12 +328,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton.icon(
-                        onPressed: _buscando
-                            ? null
-                            : () {
-                                setState(() => _buscando = true);
-                                _ejecutarBusqueda();
-                              },
+                        onPressed: _buscando ? null : _ejecutarBusqueda,
                         icon: const Icon(Icons.search),
                         label: const Text(
                           'BUSCAR',
@@ -374,8 +360,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                           ),
                           if (_resultados.isNotEmpty)
                             ElevatedButton.icon(
-                              onPressed:
-                                  _generando ? null : _generarPDF,
+                              onPressed: _generando ? null : _generarPDF,
                               icon: const Icon(
                                   Icons.picture_as_pdf_outlined,
                                   size: 18),
@@ -403,14 +388,10 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                             ),
                           ),
                         ),
-                      ..._resultados.map((doc) {
-                        final data =
-                            doc.data() as Map<String, dynamic>;
+                      ..._resultados.map((data) {
                         final tipo = data['tipo'] ?? '';
-                        final tipoAjuste =
-                            data['tipoAjuste'] ?? '';
-                        final esInventario =
-                            tipo == 'ajuste_inventario';
+                        final tipoAjuste = data['tipoAjuste'] ?? '';
+                        final esInventario = tipo == 'ajuste_inventario';
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -428,8 +409,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                             ),
                           ),
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
@@ -444,19 +424,17 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                                     ),
                                   ),
                                   Container(
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: esInventario
                                           ? (tipoAjuste == 'suma'
                                               ? Colors.green
-                                                  .withOpacity(0.1)
+                                                  .withValues(alpha: 0.1)
                                               : Colors.red
-                                                  .withOpacity(0.1))
+                                                  .withValues(alpha: 0.1))
                                           : Colors.orange
-                                              .withOpacity(0.1),
+                                              .withValues(alpha: 0.1),
                                       borderRadius:
                                           BorderRadius.circular(6),
                                       border: Border.all(
@@ -491,8 +469,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                                 spacing: 8,
                                 runSpacing: 4,
                                 children: [
-                                  _buildTag(
-                                      _labelTipo(tipo)),
+                                  _buildTag(_labelTipo(tipo)),
                                   _buildTag(
                                       '📦 ${data['cantidad'] ?? 0} unidades'),
                                   _buildTag(
@@ -501,8 +478,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                                     _buildTag(
                                         '👤 ${data['companero']}'),
                                   if (data['lote'] != null)
-                                    _buildTag(
-                                        '🔖 ${data['lote']}'),
+                                    _buildTag('🔖 ${data['lote']}'),
                                   if (esInventario &&
                                       data['stockAnterior'] != null)
                                     _buildTag(
@@ -512,7 +488,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 _formatFechaHora(
-                                    data['fecha'] as Timestamp?),
+                                    data['fecha'] as String?),
                                 style: TextStyle(
                                   color: Colors.grey[500],
                                   fontSize: 11,
@@ -539,8 +515,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
       onTap: () => onTap(!seleccionado),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: seleccionado ? AppColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -566,8 +541,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -609,7 +583,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.08),
+        color: AppColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

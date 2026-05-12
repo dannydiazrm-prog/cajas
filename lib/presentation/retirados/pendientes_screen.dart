@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -13,6 +13,32 @@ class PendientesScreen extends StatefulWidget {
 
 class _PendientesScreenState extends State<PendientesScreen> {
   bool _cerrando = false;
+  List<Map<String, dynamic>> _pendientes = [];
+  bool _cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarPendientes();
+  }
+
+  Future<void> _cargarPendientes() async {
+    setState(() => _cargando = true);
+    final retiros = await DataMaster().obtenerRetiros(estado: 'pendiente');
+    // Filtrar los que realmente tienen cantidad pendiente y ordenar por fecha
+    final filtrados = retiros.where(_tienePendiente).toList();
+    filtrados.sort((a, b) {
+      final fechaA = DateTime.tryParse(a['fecha'] as String? ?? '') ?? DateTime(2000);
+      final fechaB = DateTime.tryParse(b['fecha'] as String? ?? '') ?? DateTime(2000);
+      return fechaB.compareTo(fechaA);
+    });
+    if (mounted) {
+      setState(() {
+        _pendientes = filtrados;
+        _cargando = false;
+      });
+    }
+  }
 
   bool _tienePendiente(Map<String, dynamic> data) {
     final entregada = (data['cantidadEntregada'] ?? 0) as num;
@@ -26,8 +52,7 @@ class _PendientesScreenState extends State<PendientesScreen> {
     return (entregada - estimada).toInt();
   }
 
-  Future<void> _cerrarConDevolucion(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>;
+  Future<void> _cerrarConDevolucion(Map<String, dynamic> data) async {
     final pendiente = _cantidadPendiente(data);
     final cantidadCtrl = TextEditingController();
     String error = '';
@@ -104,8 +129,8 @@ class _PendientesScreenState extends State<PendientesScreen> {
                   return;
                 }
                 if (cantidad > pendiente) {
-                  setStateDialog(() =>
-                      error = 'No puede ser mayor al pendiente ($pendiente)');
+                  setStateDialog(
+                      () => error = 'No puede ser mayor al pendiente ($pendiente)');
                   return;
                 }
 
@@ -113,54 +138,15 @@ class _PendientesScreenState extends State<PendientesScreen> {
                 setState(() => _cerrando = true);
 
                 try {
-                  final entregada =
-                      (data['cantidadEntregada'] ?? 0) as num;
-                  final devuelta = cantidad;
-                  final consumoReal = entregada.toInt() - devuelta;
-                  final perdida = pendiente - devuelta;
-
-                  // Devolver stock al depósito
-                  final productoRef = FirebaseFirestore.instance
-    .collection('productos')
-    .doc(data['productoId']);
-final productoDoc = await productoRef.get();
-final productoData = productoDoc.data() as Map<String, dynamic>;
-final stockActual =
-    ((productoData['stockActual'] ?? 0) as num).toInt();
-final stockPorDestino = Map<String, dynamic>.from(
-  productoData['stockPorDestino'] ?? {},
-);
-
-// Devolver al destino original del retiro
-final destinoId = data['destinoId'] as String? ?? 'todos';
-final stockActualDestino =
-    (stockPorDestino[destinoId] as num?)?.toInt() ?? 0;
-stockPorDestino[destinoId] = stockActualDestino + devuelta;
-
-final batch = FirebaseFirestore.instance.batch();
-
-batch.update(productoRef, {
-  'stockActual': stockActual + devuelta,
-  'stockPorDestino': stockPorDestino,
-});
-
-                  batch.update(
-                    FirebaseFirestore.instance
-                        .collection('retiros')
-                        .doc(doc.id),
-                    {
-                      'cantidadDevuelta': devuelta,
-                      'consumoReal': consumoReal,
-                      'perdida': perdida,
-                      'motivoCierre': perdida > 0
-                          ? 'Devolución parcial'
-                          : 'Devolución total',
-                      'estado': 'cerrado',
-                      'fechaCierre': FieldValue.serverTimestamp(),
-                    },
+                  await DataMaster().cerrarRetiro(
+                    retiroId: data['id'] as String,
+                    productoId: data['productoId'] as String,
+                    destinoId: data['destinoId'] as String? ?? 'todos',
+                    cantidadDevuelta: cantidad,
+                    motivoCierre: cantidad < pendiente
+                        ? 'Devolución parcial'
+                        : 'Devolución total',
                   );
-
-                  await batch.commit();
 
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -181,7 +167,10 @@ batch.update(productoRef, {
                   }
                 }
 
-                if (mounted) setState(() => _cerrando = false);
+                if (mounted) {
+                  setState(() => _cerrando = false);
+                  await _cargarPendientes();
+                }
               },
               child: const Text(
                 'CONFIRMAR',
@@ -194,14 +183,13 @@ batch.update(productoRef, {
     );
   }
 
-  Future<void> _cerrarSinDevolucion(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>;
-    String? motivoSeleccionado;
+  Future<void> _cerrarSinDevolucion(Map<String, dynamic> data) async {
     final motivos = [
       'Pérdida normal del proceso',
       'Quedó en producción',
       'Otro',
     ];
+    String? motivoSeleccionado;
 
     await showDialog(
       context: context,
@@ -270,27 +258,13 @@ batch.update(productoRef, {
                       setState(() => _cerrando = true);
 
                       try {
-                        final entregada =
-                            (data['cantidadEntregada'] ?? 0) as num;
-                        final pendiente = _cantidadPendiente(data);
-
-                        final batch = FirebaseFirestore.instance.batch();
-
-                        batch.update(
-                          FirebaseFirestore.instance
-                              .collection('retiros')
-                              .doc(doc.id),
-                          {
-                            'cantidadDevuelta': 0,
-                            'consumoReal': entregada.toInt(),
-                            'perdida': pendiente,
-                            'motivoCierre': motivoSeleccionado,
-                            'estado': 'cerrado',
-                            'fechaCierre': FieldValue.serverTimestamp(),
-                          },
+                        await DataMaster().cerrarRetiro(
+                          retiroId: data['id'] as String,
+                          productoId: data['productoId'] as String,
+                          destinoId: data['destinoId'] as String? ?? 'todos',
+                          cantidadDevuelta: 0,
+                          motivoCierre: motivoSeleccionado!,
                         );
-
-                        await batch.commit();
 
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -311,7 +285,10 @@ batch.update(productoRef, {
                         }
                       }
 
-                      if (mounted) setState(() => _cerrando = false);
+                      if (mounted) {
+                        setState(() => _cerrando = false);
+                        await _cargarPendientes();
+                      }
                     },
               child: const Text(
                 'CONFIRMAR',
@@ -331,131 +308,47 @@ batch.update(productoRef, {
         children: [
           _buildHeader(context),
           Expanded(
-            child: _cerrando
+            child: _cerrando || _cargando
                 ? const Center(
                     child: CircularProgressIndicator(
                       color: AppColors.primary,
                     ),
                   )
-                : StreamBuilder<QuerySnapshot>(
-                    // ─── CORRECCIÓN PRINCIPAL ───────────────────────────────
-                    // Se quitó el .orderBy() del lado de Firestore para evitar
-                    // que falle por falta de índice compuesto. El ordenamiento
-                    // se hace en el cliente después de filtrar.
-                    // Si preferís usar .orderBy() en Firestore, creá el índice
-                    // compuesto en la consola: estado (ASC) + fecha (DESC).
-                    // ────────────────────────────────────────────────────────
-                    stream: FirebaseFirestore.instance
-                        .collection('retiros')
-                        .where('estado', isEqualTo: 'pendiente')
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      // ── Muestra el error real en pantalla ──────────────────
-                      if (snapshot.hasError) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.error_outline,
-                                    color: Colors.red, size: 48),
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'Error al cargar pendientes',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${snapshot.error}',
-                                  style: const TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 12,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
+                : _pendientes.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.check_circle_outline,
+                              color: AppColors.primary,
+                              size: 64,
                             ),
-                          ),
-                        );
-                      }
-                      // ───────────────────────────────────────────────────────
-
-                      if (snapshot.connectionState ==
-                          ConnectionState.waiting) {
-                        return const Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.primary,
-                          ),
-                        );
-                      }
-
-                      final docs = snapshot.data?.docs ?? [];
-
-                      // Filtrar los que realmente tienen pendiente
-                      final pendientes = docs.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        return _tienePendiente(data);
-                      }).toList();
-
-                      // Ordenar por fecha descendente en el cliente
-                      pendientes.sort((a, b) {
-                        final dataA = a.data() as Map<String, dynamic>;
-                        final dataB = b.data() as Map<String, dynamic>;
-                        final fechaA =
-                            (dataA['fecha'] as Timestamp?)?.toDate() ??
-                                DateTime(2000);
-                        final fechaB =
-                            (dataB['fecha'] as Timestamp?)?.toDate() ??
-                                DateTime(2000);
-                        return fechaB.compareTo(fechaA);
-                      });
-
-                      if (pendientes.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.check_circle_outline,
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Sin pendientes',
+                              style: TextStyle(
                                 color: AppColors.primary,
-                                size: 64,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
                               ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Sin pendientes',
-                                style: TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'No hay devoluciones pendientes',
-                                style: TextStyle(
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      return ListView.builder(
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'No hay devoluciones pendientes',
+                              style: TextStyle(color: AppColors.primary),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
                         padding: const EdgeInsets.all(16),
-                        itemCount: pendientes.length,
+                        itemCount: _pendientes.length,
                         itemBuilder: (context, index) {
-                          final doc = pendientes[index];
-                          final data =
-                              doc.data() as Map<String, dynamic>;
+                          final data = _pendientes[index];
                           final pendiente = _cantidadPendiente(data);
-                          final fecha =
-                              (data['fecha'] as Timestamp?)?.toDate();
+                          final fecha = DateTime.tryParse(
+                              data['fecha'] as String? ?? '');
                           final fechaStr = fecha != null
                               ? '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year} ${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}'
                               : '-';
@@ -472,8 +365,7 @@ batch.update(productoRef, {
                               ),
                             ),
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
@@ -494,17 +386,15 @@ batch.update(productoRef, {
                                       ),
                                     ),
                                     Container(
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                              vertical: 4),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: Colors.orange
                                             .withValues(alpha: 0.1),
                                         borderRadius:
                                             BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: Colors.orange),
+                                        border:
+                                            Border.all(color: Colors.orange),
                                       ),
                                       child: Text(
                                         '$pendiente pendientes',
@@ -522,12 +412,9 @@ batch.update(productoRef, {
                                   spacing: 8,
                                   runSpacing: 4,
                                   children: [
-                                    _buildTag(
-                                        '👤 ${data['companero'] ?? ''}'),
-                                    _buildTag(
-                                        '📦 Lote: ${data['lote'] ?? ''}'),
-                                    _buildTag(
-                                        '🌍 ${data['destino'] ?? ''}'),
+                                    _buildTag('👤 ${data['companero'] ?? ''}'),
+                                    _buildTag('📦 Lote: ${data['lote'] ?? ''}'),
+                                    _buildTag('🌍 ${data['destino'] ?? ''}'),
                                     _buildTag(
                                         '📤 Entregadas: ${data['cantidadEntregada'] ?? 0}'),
                                     _buildTag(
@@ -548,7 +435,7 @@ batch.update(productoRef, {
                                     Expanded(
                                       child: OutlinedButton(
                                         onPressed: () =>
-                                            _cerrarSinDevolucion(doc),
+                                            _cerrarSinDevolucion(data),
                                         style: OutlinedButton.styleFrom(
                                           side: const BorderSide(
                                               color: Colors.red),
@@ -571,10 +458,9 @@ batch.update(productoRef, {
                                     Expanded(
                                       child: ElevatedButton(
                                         onPressed: () =>
-                                            _cerrarConDevolucion(doc),
+                                            _cerrarConDevolucion(data),
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              AppColors.primary,
+                                          backgroundColor: AppColors.primary,
                                           shape: RoundedRectangleBorder(
                                             borderRadius:
                                                 BorderRadius.circular(8),
@@ -596,9 +482,7 @@ batch.update(productoRef, {
                             ),
                           );
                         },
-                      );
-                    },
-                  ),
+                      ),
           ),
         ],
       ),

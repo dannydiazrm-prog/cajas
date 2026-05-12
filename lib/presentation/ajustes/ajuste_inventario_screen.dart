@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -18,10 +18,10 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   bool _prospectos = false;
   bool _espanol = false;
   bool _ingles = false;
-  List<QueryDocumentSnapshot> _resultados = [];
+  List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
-  QueryDocumentSnapshot? _productoSeleccionado;
+  Map<String, dynamic>? _productoSeleccionado;
 
   // Formulario
   String? _tipoAjuste; // 'suma' o 'resta'
@@ -60,36 +60,26 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
       _productoSeleccionado = null;
     });
 
-    Query query = FirebaseFirestore.instance.collection('productos');
-
-    if (_etiquetas && !_prospectos) {
-      query = query.where('tipo', isEqualTo: 'Etiqueta');
-    } else if (_prospectos && !_etiquetas) {
-      query = query.where('tipo', isEqualTo: 'Prospecto');
-    }
-
-    if (_espanol && !_ingles) {
-      query = query.where('idioma', isEqualTo: 'ES');
-    } else if (_ingles && !_espanol) {
-      query = query.where('idioma', isEqualTo: 'EN');
-    }
-
-    final snapshot = await query.get();
-    List<QueryDocumentSnapshot> docs = snapshot.docs;
+    final todos = await DataMaster().obtenerProductos();
 
     final nombre = _nombreController.text.trim().toLowerCase();
-    if (nombre.isNotEmpty) {
-      docs = docs.where((d) {
-        final data = d.data() as Map<String, dynamic>;
-        return (data['nombre'] ?? '')
-            .toString()
-            .toLowerCase()
-            .contains(nombre);
-      }).toList();
-    }
+
+    final filtrados = todos.where((p) {
+      final tipo = (p['tipo'] ?? '').toString();
+      final idioma = (p['idioma'] ?? '').toString();
+      final pNombre = (p['nombre'] ?? '').toString().toLowerCase();
+
+      if (_etiquetas && !_prospectos && tipo != 'Etiqueta') return false;
+      if (_prospectos && !_etiquetas && tipo != 'Prospecto') return false;
+      if (_espanol && !_ingles && idioma != 'ES') return false;
+      if (_ingles && !_espanol && idioma != 'EN') return false;
+      if (nombre.isNotEmpty && !pNombre.contains(nombre)) return false;
+
+      return true;
+    }).toList();
 
     setState(() {
-      _resultados = docs;
+      _resultados = filtrados;
       _buscando = false;
       _buscado = true;
     });
@@ -114,8 +104,8 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
       return;
     }
 
-    final data = _productoSeleccionado!.data() as Map<String, dynamic>;
-    final stockActual = data['stockActual'] ?? 0;
+    final data = _productoSeleccionado!;
+    final stockActual = (data['stockActual'] ?? 0) as int;
 
     if (_tipoAjuste == 'resta' && cantidad > stockActual) {
       setState(
@@ -131,37 +121,13 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     try {
       final motivoFinal =
           _motivo == 'Otro' ? _otroController.text.trim() : _motivo!;
-      final nuevoStock = _tipoAjuste == 'suma'
-          ? stockActual + cantidad
-          : stockActual - cantidad;
 
-      final batch = FirebaseFirestore.instance.batch();
-
-      batch.update(
-        FirebaseFirestore.instance
-            .collection('productos')
-            .doc(_productoSeleccionado!.id),
-        {'stockActual': nuevoStock},
+      await DataMaster().registrarAjuste(
+        productoId: data['id'] as String,
+        tipoAjuste: _tipoAjuste!,
+        cantidad: cantidad,
+        motivo: motivoFinal,
       );
-
-      batch.set(
-        FirebaseFirestore.instance.collection('ajustes').doc(),
-        {
-          'tipo': 'ajuste_inventario',
-          'tipoAjuste': _tipoAjuste,
-          'productoId': _productoSeleccionado!.id,
-          'productoNombre': data['nombre'],
-          'tipoProducto': data['tipo'],
-          'idioma': data['idioma'],
-          'stockAnterior': stockActual,
-          'cantidad': cantidad,
-          'stockNuevo': nuevoStock,
-          'motivo': motivoFinal,
-          'fecha': FieldValue.serverTimestamp(),
-        },
-      );
-
-      await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -229,8 +195,8 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: AppColors.primary, width: 2),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 2),
             ),
           ),
         ),
@@ -243,10 +209,10 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                 (v) => setState(() => _etiquetas = v)),
             _buildChip('Prospectos', _prospectos,
                 (v) => setState(() => _prospectos = v)),
-            _buildChip('Español', _espanol,
-                (v) => setState(() => _espanol = v)),
-            _buildChip('Ingles', _ingles,
-                (v) => setState(() => _ingles = v)),
+            _buildChip(
+                'Español', _espanol, (v) => setState(() => _espanol = v)),
+            _buildChip(
+                'Ingles', _ingles, (v) => setState(() => _ingles = v)),
           ],
         ),
         const SizedBox(height: 16),
@@ -281,15 +247,14 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
               ),
             ),
           ),
-        ..._resultados.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+        ..._resultados.map((data) {
           final stock = data['stockActual'] ?? 0;
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () => setState(() {
-                _productoSeleccionado = doc;
+                _productoSeleccionado = data;
                 _tipoAjuste = null;
                 _motivo = null;
                 _cantidadController.clear();
@@ -302,7 +267,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
@@ -353,7 +318,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   }
 
   Widget _buildFormulario() {
-    final data = _productoSeleccionado!.data() as Map<String, dynamic>;
+    final data = _productoSeleccionado!;
     final stock = data['stockActual'] ?? 0;
     final motivos =
         _tipoAjuste == 'suma' ? _motivosSuma : _motivosResta;
@@ -517,7 +482,6 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
         const SizedBox(height: 24),
 
         if (_tipoAjuste != null) ...[
-          // Cantidad
           const Text(
             'CANTIDAD',
             style: TextStyle(
@@ -537,19 +501,17 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
               fillColor: Colors.white,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide:
-                    const BorderSide(color: AppColors.primary),
+                borderSide: const BorderSide(color: AppColors.primary),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                    color: AppColors.primary, width: 2),
+                borderSide:
+                    const BorderSide(color: AppColors.primary, width: 2),
               ),
             ),
           ),
           const SizedBox(height: 24),
 
-          // Motivo
           const Text(
             'MOTIVO',
             style: TextStyle(
@@ -620,7 +582,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.red),
               ),
@@ -639,8 +601,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
             child: ElevatedButton(
               onPressed: _guardando ? null : _confirmar,
               child: _guardando
-                  ? const CircularProgressIndicator(
-                      color: Colors.white)
+                  ? const CircularProgressIndicator(color: Colors.white)
                   : const Text(
                       'CONFIRMAR AJUSTE',
                       style: TextStyle(
@@ -685,7 +646,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: (color ?? AppColors.primary).withOpacity(0.1),
+        color: (color ?? AppColors.primary).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -703,7 +664,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

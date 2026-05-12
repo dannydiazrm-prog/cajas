@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -15,7 +15,7 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
   final _nombreController = TextEditingController();
   DateTime? _desde;
   DateTime? _hasta;
-  List<QueryDocumentSnapshot> _resultados = [];
+  List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
 
@@ -39,57 +39,52 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
       _buscado = false;
     });
 
-    Query query = FirebaseFirestore.instance
-        .collection('ajustes')
-        .orderBy('fecha', descending: true);
+    final nombre = _nombreController.text.trim();
+    final resultados = await DataMaster().obtenerAjustes(
+      desde: _desde,
+      hasta: _hasta,
+    );
 
-    if (_desde != null) {
-      query = query.where('fecha',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(_desde!));
-    }
-    if (_hasta != null) {
-      query = query.where('fecha',
-          isLessThanOrEqualTo: Timestamp.fromDate(_hasta!));
-    }
-
-    final snapshot = await query.get();
-    List<QueryDocumentSnapshot> docs = snapshot.docs;
-
-    final nombre = _nombreController.text.trim().toLowerCase();
+    List<Map<String, dynamic>> filtrados = resultados;
     if (nombre.isNotEmpty) {
-      docs = docs.where((d) {
-        final data = d.data() as Map<String, dynamic>;
-        return (data['productoNombre'] ?? '')
+      final nombreLower = nombre.toLowerCase();
+      filtrados = resultados.where((d) {
+        return (d['productoNombre'] ?? '')
             .toString()
             .toLowerCase()
-            .contains(nombre);
+            .contains(nombreLower);
       }).toList();
     }
 
     setState(() {
-      _resultados = docs;
+      _resultados = filtrados;
       _buscando = false;
       _buscado = true;
     });
   }
 
-  Future<void> _confirmarBorrado(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>;
+  Future<void> _confirmarBorrado(Map<String, dynamic> data) async {
     final productoId = data['productoId'] as String?;
-    final fechaAjuste = data['fecha'] as Timestamp?;
+    final ajusteId = data['id'] as String?;
     final tipoAjuste = data['tipoAjuste'] as String? ?? 'entrada';
 
-    if (productoId == null || fechaAjuste == null) return;
+    if (productoId == null || ajusteId == null) return;
 
     // Solo bloquear si es entrada y hubo retiros después
     if (tipoAjuste == 'entrada') {
-      final retiros = await FirebaseFirestore.instance
-          .collection('retiros')
-          .where('productoId', isEqualTo: productoId)
-          .where('fecha', isGreaterThanOrEqualTo: fechaAjuste)
-          .get();
+      final fechaAjuste = data['fecha'] as String?;
+      final retiros = await DataMaster().obtenerRetiros();
+      final retirosPosteriores = retiros.where((r) {
+        if (r['productoId'] != productoId) return false;
+        final fechaRetiro =
+            DateTime.tryParse(r['fecha'] as String? ?? '') ?? DateTime(2000);
+        final fechaAj =
+            DateTime.tryParse(fechaAjuste ?? '') ?? DateTime(2000);
+        return fechaRetiro.isAfter(fechaAj) ||
+            fechaRetiro.isAtSameMomentAs(fechaAj);
+      }).toList();
 
-      if (retiros.docs.isNotEmpty) {
+      if (retirosPosteriores.isNotEmpty) {
         if (mounted) {
           showDialog(
             context: context,
@@ -109,7 +104,7 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
                 ],
               ),
               content: Text(
-                'Este producto tiene ${retiros.docs.length} retiro${retiros.docs.length != 1 ? 's' : ''} registrado${retiros.docs.length != 1 ? 's' : ''} después de este ajuste. No se puede borrar para mantener la integridad del inventario.',
+                'Este producto tiene ${retirosPosteriores.length} retiro${retirosPosteriores.length != 1 ? 's' : ''} registrado${retirosPosteriores.length != 1 ? 's' : ''} después de este ajuste. No se puede borrar para mantener la integridad del inventario.',
                 style: const TextStyle(fontSize: 14),
               ),
               actions: [
@@ -130,7 +125,6 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
       }
     }
 
-    // Proceder con confirmación normal
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -189,40 +183,19 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
     );
 
     if (confirmado != true) return;
-    await _borrarAjuste(doc);
-  }
-
-  Future<void> _borrarAjuste(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>;
-    final productoId = data['productoId'] as String?;
-    final stockAnterior = (data['stockAnterior'] as num?)?.toInt();
-
-    if (productoId == null || stockAnterior == null) return;
 
     try {
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Revertir stock al valor anterior
-      batch.update(
-        FirebaseFirestore.instance.collection('productos').doc(productoId),
-        {'stockActual': stockAnterior},
-      );
-
-      batch.delete(
-        FirebaseFirestore.instance.collection('ajustes').doc(doc.id),
-      );
-
-      await batch.commit();
-
-      setState(() => _resultados.remove(doc));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ajuste eliminado y stock revertido'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
+      final ok = await DataMaster().eliminarAjuste(ajusteId);
+      if (ok) {
+        setState(() => _resultados.remove(data));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ajuste eliminado y stock revertido'),
+              backgroundColor: AppColors.primary,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -236,11 +209,12 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
     }
   }
 
-  Future<void> _editarAjuste(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>;
+  Future<void> _editarAjuste(Map<String, dynamic> data) async {
     final cantidadOriginal = (data['cantidad'] as num?)?.toInt() ?? 0;
-    final stockAnterior = (data['stockAnterior'] as num?)?.toInt() ?? 0;
     final tipoAjuste = data['tipoAjuste'] as String? ?? 'entrada';
+    final ajusteId = data['id'] as String?;
+    if (ajusteId == null) return;
+
     final cantidadCtrl =
         TextEditingController(text: cantidadOriginal.toString());
 
@@ -297,8 +271,8 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text(
               'GUARDAR',
@@ -314,40 +288,21 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
     final nuevaCantidad = int.tryParse(cantidadCtrl.text.trim());
     if (nuevaCantidad == null || nuevaCantidad <= 0) return;
 
-    final productoId = data['productoId'] as String?;
-    if (productoId == null) return;
-
     try {
-      // Recalcular stock nuevo según tipo de ajuste
-      final nuevoStockNuevo = tipoAjuste == 'entrada'
-          ? stockAnterior + nuevaCantidad
-          : stockAnterior - nuevaCantidad;
-
-      final batch = FirebaseFirestore.instance.batch();
-
-      batch.update(
-        FirebaseFirestore.instance.collection('productos').doc(productoId),
-        {'stockActual': nuevoStockNuevo.clamp(0, double.infinity).toInt()},
+      final ok = await DataMaster().editarCantidadAjuste(
+        ajusteId: ajusteId,
+        nuevaCantidad: nuevaCantidad,
       );
-
-      batch.update(
-        FirebaseFirestore.instance.collection('ajustes').doc(doc.id),
-        {
-          'cantidad': nuevaCantidad,
-          'stockNuevo': nuevoStockNuevo.clamp(0, double.infinity).toInt(),
-        },
-      );
-
-      await batch.commit();
-      _buscar();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ajuste actualizado y stock corregido'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
+      if (ok) {
+        _buscar();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ajuste actualizado y stock corregido'),
+              backgroundColor: AppColors.primary,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -366,9 +321,10 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
     return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year}';
   }
 
-  String _formatTimestamp(Timestamp? ts) {
-    if (ts == null) return '-';
-    final fecha = ts.toDate();
+  String _formatFechaHora(String? fechaStr) {
+    if (fechaStr == null) return '-';
+    final fecha = DateTime.tryParse(fechaStr);
+    if (fecha == null) return '-';
     return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year} ${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
   }
 
@@ -396,7 +352,7 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
     }
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
@@ -414,10 +370,10 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.08),
+                        color: Colors.red.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8),
-                        border:
-                            Border.all(color: Colors.red.withOpacity(0.4)),
+                        border: Border.all(
+                            color: Colors.red.withValues(alpha: 0.4)),
                       ),
                       child: const Row(
                         children: [
@@ -520,11 +476,10 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
                             ),
                           ),
                         ),
-                      ..._resultados.map((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
+                      ..._resultados.map((data) {
                         final tipoAjuste =
                             data['tipoAjuste'] as String? ?? 'entrada';
-                        final esEntrada = tipoAjuste == 'entrada';
+                        final esEntrada = tipoAjuste == 'entrada' || tipoAjuste == 'suma';
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(16),
@@ -532,7 +487,7 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: AppColors.primary.withOpacity(0.3),
+                              color: AppColors.primary.withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(
@@ -575,8 +530,8 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      _formatTimestamp(
-                                          data['fecha'] as Timestamp?),
+                                      _formatFechaHora(
+                                          data['fecha'] as String?),
                                       style: TextStyle(
                                         color: Colors.grey[500],
                                         fontSize: 11,
@@ -590,13 +545,13 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
                                   IconButton(
                                     icon: const Icon(Icons.edit_outlined,
                                         color: AppColors.primary),
-                                    onPressed: () => _editarAjuste(doc),
+                                    onPressed: () => _editarAjuste(data),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline,
                                         color: Colors.red),
                                     onPressed: () =>
-                                        _confirmarBorrado(doc),
+                                        _confirmarBorrado(data),
                                   ),
                                 ],
                               ),
@@ -665,7 +620,7 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: (color ?? AppColors.primary).withOpacity(0.1),
+        color: (color ?? AppColors.primary).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

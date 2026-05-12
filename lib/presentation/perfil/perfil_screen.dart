@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -27,8 +27,12 @@ class _PerfilScreenState extends State<PerfilScreen> {
   @override
   void initState() {
     super.initState();
-    // Por ahora simulamos pendientes, luego conectamos con data_master
-    _pendientes = 0;
+    _cargarPendientes();
+  }
+
+  Future<void> _cargarPendientes() async {
+    final total = await DataMaster().contarPendientes();
+    if (mounted) setState(() => _pendientes = total);
   }
 
   @override
@@ -60,26 +64,19 @@ class _PerfilScreenState extends State<PerfilScreen> {
     setState(() => _loading = true);
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('config')
-          .doc('pin')
-          .get();
-      final pinGuardado = doc.data()?['valor'] ?? '';
+      final pinGuardado = await DataMaster().leerConfig('pin') ?? '';
 
       if (actual != pinGuardado) {
         setState(() => _mensaje = 'PIN actual incorrecto');
       } else {
-        await FirebaseFirestore.instance
-            .collection('config')
-            .doc('pin')
-            .update({'valor': nuevo});
+        await DataMaster().guardarConfig('pin', nuevo);
         setState(() => _mensaje = 'PIN actualizado correctamente');
         _pinActualController.clear();
         _pinNuevoController.clear();
         _pinConfirmController.clear();
       }
     } catch (e) {
-      setState(() => _mensaje = 'Error de conexión');
+      setState(() => _mensaje = 'Error al actualizar el PIN');
     }
 
     setState(() => _loading = false);
@@ -92,21 +89,99 @@ class _PerfilScreenState extends State<PerfilScreen> {
     });
 
     try {
-      // TODO: conectar con DataMaster.sincronizar() cuando esté listo
-      await Future.delayed(const Duration(seconds: 2)); // placeholder
-      setState(() {
-        _pendientes = 0;
-        _estadoSync = 'Sincronización completada';
-      });
+      await DataMaster().sincronizar();
+      final pendientes = await DataMaster().contarPendientes();
+      if (mounted) {
+        setState(() {
+          _pendientes = pendientes;
+          _estadoSync = 'Sincronización completada';
+        });
+      }
     } catch (e) {
-      setState(() => _estadoSync = 'Error al sincronizar: $e');
+      if (mounted) setState(() => _estadoSync = 'Error al sincronizar: $e');
     }
 
-    setState(() => _sincronizando = false);
+    if (mounted) setState(() => _sincronizando = false);
   }
 
   void _cerrarSesion() {
     context.go('/pin');
+  }
+
+  Future<void> _accederGestionDatos(BuildContext context) async {
+    String pin = '';
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'GESTIÓN DE DATOS',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w900,
+            fontSize: 16,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Ingresa tu PIN para continuar',
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              obscureText: true,
+              decoration: InputDecoration(
+                hintText: '****',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                counterText: '',
+              ),
+              onChanged: (v) => pin = v,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'ENTRAR',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado != true) return;
+
+    final pinGuardado = await DataMaster().leerConfig('pin') ?? '';
+
+    if (pin != pinGuardado) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PIN incorrecto'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (mounted) context.push('/perfil/gestion');
   }
 
   @override
@@ -134,7 +209,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                           border: Border.all(
                             color: _pendientes > 0
                                 ? Colors.orange
-                                : AppColors.primary.withOpacity(0.3),
+                                : AppColors.primary.withValues(alpha: 0.3),
                             width: _pendientes > 0 ? 2 : 1,
                           ),
                         ),
@@ -186,7 +261,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
                               width: double.infinity,
                               height: 48,
                               child: ElevatedButton.icon(
-                                onPressed: _sincronizando ? null : _sincronizar,
+                                onPressed:
+                                    _sincronizando ? null : _sincronizar,
                                 icon: _sincronizando
                                     ? const SizedBox(
                                         width: 18,
@@ -255,8 +331,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: _mensaje.contains('correctamente')
-                                ? Colors.green.withOpacity(0.1)
-                                : Colors.red.withOpacity(0.1),
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.red.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: _mensaje.contains('correctamente')
@@ -313,7 +389,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
                             ),
                           ),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.primary),
+                            side:
+                                const BorderSide(color: AppColors.primary),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
@@ -329,86 +406,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _accederGestionDatos(BuildContext context) async {
-    String pin = '';
-    final confirmado = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'GESTIÓN DE DATOS',
-          style: TextStyle(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Ingresa tu PIN para continuar',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              obscureText: true,
-              decoration: InputDecoration(
-                hintText: '****',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                counterText: '',
-              ),
-              onChanged: (v) => pin = v,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'ENTRAR',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmado != true) return;
-
-    final pinDoc = await FirebaseFirestore.instance
-        .collection('config')
-        .doc('pin')
-        .get();
-    final pinGuardado = pinDoc.data()?['valor'] ?? '';
-
-    if (pin != pinGuardado) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('PIN incorrecto'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
-    }
-
-    if (mounted) context.push('/perfil/gestion');
   }
 
   Widget _buildHeader(BuildContext context) {
@@ -470,7 +467,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide:
+              const BorderSide(color: AppColors.primary, width: 2),
         ),
         suffixIcon: IconButton(
           icon: Icon(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -16,7 +16,7 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
   final _nombreController = TextEditingController();
   DateTime? _desde;
   DateTime? _hasta;
-  List<QueryDocumentSnapshot> _resultados = [];
+  List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
 
@@ -40,35 +40,24 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
       _buscado = false;
     });
 
-    Query query = FirebaseFirestore.instance
-        .collection('recepciones')
-        .orderBy('fecha', descending: true);
+    final nombre = _nombreController.text.trim();
+    final resultados = await DataMaster().obtenerRecepciones(
+      desde: _desde,
+      hasta: _hasta,
+      nombre: nombre.isNotEmpty ? nombre : null,
+    );
 
-    if (_desde != null) {
-      query = query.where('fecha',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(_desde!));
-    }
-    if (_hasta != null) {
-      query = query.where('fecha',
-          isLessThanOrEqualTo: Timestamp.fromDate(_hasta!));
-    }
-
-    final snapshot = await query.get();
-    List<QueryDocumentSnapshot> docs = snapshot.docs;
-
-    final nombre = _nombreController.text.trim().toLowerCase();
-    if (nombre.isNotEmpty) {
-      docs = docs.where((d) {
-        final data = d.data() as Map<String, dynamic>;
-        return (data['productoNombre'] ?? '')
-            .toString()
-            .toLowerCase()
-            .contains(nombre);
-      }).toList();
-    }
+    // Ordenar por fecha descendente
+    resultados.sort((a, b) {
+      final fechaA =
+          DateTime.tryParse(a['fecha'] as String? ?? '') ?? DateTime(2000);
+      final fechaB =
+          DateTime.tryParse(b['fecha'] as String? ?? '') ?? DateTime(2000);
+      return fechaB.compareTo(fechaA);
+    });
 
     setState(() {
-      _resultados = docs;
+      _resultados = resultados;
       _buscando = false;
       _buscado = true;
     });
@@ -98,21 +87,25 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
     }
   }
 
-  Future<void> _confirmarBorrado(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>;
+  Future<void> _confirmarBorrado(Map<String, dynamic> data) async {
     final productoId = data['productoId'] as String?;
-    final fechaRecepcion = data['fecha'] as Timestamp?;
+    final recepcionId = data['id'] as String?;
+    if (productoId == null || recepcionId == null) return;
 
-    if (productoId == null || fechaRecepcion == null) return;
+    // Verificar retiros posteriores consultando directamente
+    final fechaRecepcion = data['fecha'] as String?;
+    final retiros = await DataMaster().obtenerRetiros();
+    final retirosPosteriores = retiros.where((r) {
+      if (r['productoId'] != productoId) return false;
+      final fechaRetiro =
+          DateTime.tryParse(r['fecha'] as String? ?? '') ?? DateTime(2000);
+      final fechaRec =
+          DateTime.tryParse(fechaRecepcion ?? '') ?? DateTime(2000);
+      return fechaRetiro.isAfter(fechaRec) ||
+          fechaRetiro.isAtSameMomentAs(fechaRec);
+    }).toList();
 
-    // Verificar si hubo retiros después de esta recepción
-    final retiros = await FirebaseFirestore.instance
-        .collection('retiros')
-        .where('productoId', isEqualTo: productoId)
-        .where('fecha', isGreaterThanOrEqualTo: fechaRecepcion)
-        .get();
-
-    if (retiros.docs.isNotEmpty) {
+    if (retirosPosteriores.isNotEmpty) {
       if (mounted) {
         showDialog(
           context: context,
@@ -132,7 +125,7 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
               ],
             ),
             content: Text(
-              'Este producto tiene ${retiros.docs.length} retiro${retiros.docs.length != 1 ? 's' : ''} registrado${retiros.docs.length != 1 ? 's' : ''} después de esta recepción. No se puede borrar para mantener la integridad del inventario.',
+              'Este producto tiene ${retirosPosteriores.length} retiro${retirosPosteriores.length != 1 ? 's' : ''} registrado${retirosPosteriores.length != 1 ? 's' : ''} después de esta recepción. No se puede borrar para mantener la integridad del inventario.',
               style: const TextStyle(fontSize: 14),
             ),
             actions: [
@@ -152,7 +145,6 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
       return;
     }
 
-    // Sin retiros, proceder con confirmación normal
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -209,91 +201,19 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
     );
 
     if (confirmado != true) return;
-    await _borrarRecepcion(doc);
-  }
-  
-  Future<void> _borrarRecepcion(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>;
-    final productoId = data['productoId'] as String?;
-    final cantidad = (data['cantidad'] as num?)?.toInt() ?? 0;
-    final destinoClave = data['destinoClave'] as String? ?? 'todos';
-    final codigo = (data['codigo'] ?? '').toString();
-
-    if (productoId == null) return;
 
     try {
-      final productoRef = FirebaseFirestore.instance
-          .collection('productos')
-          .doc(productoId);
-      final productoDoc = await productoRef.get();
-
-      if (!productoDoc.exists) {
-        await FirebaseFirestore.instance
-            .collection('recepciones')
-            .doc(doc.id)
-            .delete();
-        setState(() => _resultados.remove(doc));
-        return;
-      }
-
-      final productoData = productoDoc.data() as Map<String, dynamic>;
-      final stockPorDestino = Map<String, dynamic>.from(
-        productoData['stockPorDestino'] ?? {},
-      );
-
-      // Restar del destino correspondiente
-      final stockActualDestino =
-          (stockPorDestino[destinoClave] as num?)?.toInt() ?? 0;
-      stockPorDestino[destinoClave] =
-          (stockActualDestino - cantidad).clamp(0, double.infinity).toInt();
-
-      // Recalcular total
-      final nuevoStockTotal = stockPorDestino.values
-          .fold<int>(0, (sum, v) => sum + ((v as num).toInt()));
-
-      final batch = FirebaseFirestore.instance.batch();
-
-      batch.update(productoRef, {
-        'stockActual': nuevoStockTotal,
-        'stockPorDestino': stockPorDestino,
-      });
-
-      batch.delete(
-        FirebaseFirestore.instance.collection('recepciones').doc(doc.id),
-      );
-
-      // Verificar si hay más recepciones con ese prefijo
-      if (codigo.length >= 2) {
-        final prefijo = codigo.substring(0, 2);
-        final otrasRecepciones = await FirebaseFirestore.instance
-            .collection('recepciones')
-            .where('productoId', isEqualTo: productoId)
-            .get();
-
-        final quedanConPrefijo = otrasRecepciones.docs.any((d) {
-          final c = (d.data()['codigo'] ?? '').toString();
-          return c.startsWith(prefijo) && d.id != doc.id;
-        });
-
-        if (!quedanConPrefijo) {
-          batch.update(
-            FirebaseFirestore.instance.collection('config').doc('prefijos'),
-            {'usados': FieldValue.arrayRemove([prefijo])},
+      final ok = await DataMaster().eliminarRecepcion(recepcionId);
+      if (ok) {
+        setState(() => _resultados.remove(data));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Recepción eliminada y stock ajustado'),
+              backgroundColor: AppColors.primary,
+            ),
           );
         }
-      }
-
-      await batch.commit();
-
-      setState(() => _resultados.remove(doc));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Recepción eliminada y stock ajustado'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
       }
     } catch (e) {
       if (mounted) {
@@ -307,9 +227,11 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
     }
   }
 
-  Future<void> _editarRecepcion(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>;
+  Future<void> _editarRecepcion(Map<String, dynamic> data) async {
     final cantidadOriginal = (data['cantidad'] as num?)?.toInt() ?? 0;
+    final recepcionId = data['id'] as String?;
+    if (recepcionId == null) return;
+
     final cantidadCtrl =
         TextEditingController(text: cantidadOriginal.toString());
 
@@ -361,8 +283,8 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text(
               'GUARDAR',
@@ -378,55 +300,21 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
     final nuevaCantidad = int.tryParse(cantidadCtrl.text.trim());
     if (nuevaCantidad == null || nuevaCantidad <= 0) return;
 
-    final diferencia = nuevaCantidad - cantidadOriginal;
-    final productoId = data['productoId'] as String?;
-    final destinoClave = data['destinoClave'] as String? ?? 'todos';
-
-    if (productoId == null) return;
-
     try {
-      final productoRef = FirebaseFirestore.instance
-          .collection('productos')
-          .doc(productoId);
-      final productoDoc = await productoRef.get();
-      if (!productoDoc.exists) return;
-
-      final productoData = productoDoc.data() as Map<String, dynamic>;
-      final stockPorDestino = Map<String, dynamic>.from(
-        productoData['stockPorDestino'] ?? {},
+      final ok = await DataMaster().editarCantidadRecepcion(
+        recepcionId: recepcionId,
+        nuevaCantidad: nuevaCantidad,
       );
-
-      final stockActualDestino =
-          (stockPorDestino[destinoClave] as num?)?.toInt() ?? 0;
-      stockPorDestino[destinoClave] =
-          (stockActualDestino + diferencia).clamp(0, double.infinity).toInt();
-
-      final nuevoStockTotal = stockPorDestino.values
-          .fold<int>(0, (sum, v) => sum + ((v as num).toInt()));
-
-      final batch = FirebaseFirestore.instance.batch();
-
-      batch.update(productoRef, {
-        'stockActual': nuevoStockTotal,
-        'stockPorDestino': stockPorDestino,
-      });
-
-      batch.update(
-        FirebaseFirestore.instance.collection('recepciones').doc(doc.id),
-        {'cantidad': nuevaCantidad},
-      );
-
-      await batch.commit();
-
-      _buscar();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Recepción actualizada y stock ajustado'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
+      if (ok) {
+        _buscar();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Recepción actualizada y stock ajustado'),
+              backgroundColor: AppColors.primary,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -445,13 +333,14 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
     return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year}';
   }
 
-  String _formatTimestamp(Timestamp? ts) {
-    if (ts == null) return '-';
-    final fecha = ts.toDate();
+  String _formatFechaHora(String? fechaStr) {
+    if (fechaStr == null) return '-';
+    final fecha = DateTime.tryParse(fechaStr);
+    if (fecha == null) return '-';
     return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year} ${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
@@ -469,9 +358,10 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.08),
+                        color: Colors.red.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.withOpacity(0.4)),
+                        border: Border.all(
+                            color: Colors.red.withValues(alpha: 0.4)),
                       ),
                       child: const Row(
                         children: [
@@ -574,8 +464,7 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
                             ),
                           ),
                         ),
-                      ..._resultados.map((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
+                      ..._resultados.map((data) {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(16),
@@ -583,7 +472,7 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: AppColors.primary.withOpacity(0.3),
+                              color: AppColors.primary.withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(
@@ -616,8 +505,8 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      _formatTimestamp(
-                                          data['fecha'] as Timestamp?),
+                                      _formatFechaHora(
+                                          data['fecha'] as String?),
                                       style: TextStyle(
                                         color: Colors.grey[500],
                                         fontSize: 11,
@@ -631,14 +520,13 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
                                   IconButton(
                                     icon: const Icon(Icons.edit_outlined,
                                         color: AppColors.primary),
-                                    onPressed: () =>
-                                        _editarRecepcion(doc),
+                                    onPressed: () => _editarRecepcion(data),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline,
                                         color: Colors.red),
                                     onPressed: () =>
-                                        _confirmarBorrado(doc),
+                                        _confirmarBorrado(data),
                                   ),
                                 ],
                               ),
@@ -665,7 +553,8 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -707,7 +596,7 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -751,4 +640,4 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
       ),
     );
   }
-}     
+}
