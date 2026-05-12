@@ -34,9 +34,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   bool _guardando = false;
   String _error = '';
 
-  String _docId(Map<String, dynamic> d) =>
-      d['firestoreId']?.toString() ?? d['id']?.toString() ?? '';
-
   @override
   void dispose() {
     _nombreController.dispose();
@@ -102,7 +99,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
       } else {
         final destinos = await DataMaster().obtenerDestinos();
         final match = destinos.firstWhere(
-          (d) => _docId(d) == id,
+          (d) => (d['id']?.toString() ?? '') == id,
           orElse: () => {'nombre': id},
         );
         nombre = match['nombre']?.toString() ?? id;
@@ -161,10 +158,8 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     final stockPorDestino = Map<String, dynamic>.from(
       data['stockPorDestino'] ?? {},
     );
-
-    final claveDescuento = _destinoSeleccionadoId!;
     final stockDisponible =
-        (stockPorDestino[claveDescuento] as num?)?.toInt() ?? 0;
+        (stockPorDestino[_destinoSeleccionadoId!] as num?)?.toInt() ?? 0;
 
     if (cantidadEntregada > stockDisponible) {
       setState(() =>
@@ -179,36 +174,25 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
 
     try {
       final hayPendiente = cantidadEntregada > cantidadEstimada;
-      final estadoInicial = hayPendiente ? 'pendiente' : 'cerrado';
-      final consumoReal = hayPendiente ? null : cantidadEntregada;
-      final perdida = hayPendiente ? null : 0;
-      final motivoCierre = hayPendiente ? null : 'Entrega exacta o menor';
 
-      stockPorDestino[claveDescuento] = stockDisponible - cantidadEntregada;
-
-      final nuevoStockTotal = stockPorDestino.values
-          .fold<int>(0, (sum, v) => sum + ((v as num).toInt()));
-
-      await DataMaster().registrarRetiro(
-        productoId: _docId(data),
+      final ok = await DataMaster().registrarRetiro(
+        productoId: data['id']?.toString() ?? '',
         productoNombre: data['nombre'] ?? '',
         tipo: data['tipo'] ?? '',
         idioma: data['idioma'] ?? '',
         companero: companero,
         lote: lote,
         destino: _destinoSeleccionado ?? '',
-        destinoId: claveDescuento,
+        destinoId: _destinoSeleccionadoId!,
         cantidadEstimada: cantidadEstimada,
         cantidadEntregada: cantidadEntregada,
-        cantidadDevuelta: 0,
-        consumoReal: consumoReal,
-        perdida: perdida,
-        motivoCierre: motivoCierre,
-        estado: estadoInicial,
-        hayPendiente: hayPendiente,
-        nuevoStock: nuevoStockTotal,
-        stockPorDestino: stockPorDestino,
       );
+
+      if (!ok) {
+        setState(() => _error = 'Stock insuficiente. Verificá el inventario.');
+        setState(() => _guardando = false);
+        return;
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -270,7 +254,8 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           controller: _nombreController,
           decoration: InputDecoration(
             hintText: 'Buscar por nombre',
-            prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+            prefixIcon:
+                const Icon(Icons.search, color: AppColors.primary),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
@@ -293,9 +278,10 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 (v) => setState(() => _etiquetas = v)),
             _buildChip('Prospectos', _prospectos,
                 (v) => setState(() => _prospectos = v)),
-            _buildChip(
-                'Español', _espanol, (v) => setState(() => _espanol = v)),
-            _buildChip('Inglés', _ingles, (v) => setState(() => _ingles = v)),
+            _buildChip('Español', _espanol,
+                (v) => setState(() => _espanol = v)),
+            _buildChip('Inglés', _ingles,
+                (v) => setState(() => _ingles = v)),
           ],
         ),
         const SizedBox(height: 16),
@@ -343,7 +329,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
@@ -483,14 +469,14 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.red),
             ),
             child: const Text(
               'Este producto no tiene stock registrado por destino. Realiza una recepción primero.',
-              style:
-                  TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: Colors.red, fontWeight: FontWeight.w600),
             ),
           )
         else
@@ -533,7 +519,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                         style: TextStyle(
                           color: seleccionado
                               ? Colors.white70
-                              : AppColors.primary.withOpacity(0.6),
+                              : AppColors.primary.withValues(alpha: 0.6),
                           fontSize: 11,
                         ),
                       ),
@@ -570,7 +556,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.orange),
             ),
@@ -602,7 +588,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.red),
             ),
@@ -705,7 +691,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: (color ?? AppColors.primary).withOpacity(0.1),
+        color: (color ?? AppColors.primary).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -723,7 +709,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

@@ -36,9 +36,6 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
     super.dispose();
   }
 
-  String _docId(Map<String, dynamic> d) =>
-      d['firestoreId']?.toString() ?? d['id']?.toString() ?? '';
-
   Future<void> _buscar() async {
     setState(() {
       _buscando = true;
@@ -83,7 +80,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
     final destinosFirestore = await DataMaster().obtenerDestinos();
     final destinosExtra = destinosFirestore
         .where((d) => d['nombre'] != 'Todos' && d['nombre'] != 'Local')
-        .map((d) => {'id': _docId(d), 'nombre': d['nombre'] ?? ''})
+        .map((d) => {'id': d['id']?.toString() ?? '', 'nombre': d['nombre'] ?? ''})
         .toList();
 
     setState(() {
@@ -153,30 +150,13 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
     setState(() => _guardando = true);
 
     try {
-      final productoId = _docId(data);
+      final productoId = data['id']?.toString() ?? '';
 
       final String destinoClave;
       if (destinosHabilitados.contains('todos')) {
         destinoClave = 'todos';
       } else {
         destinoClave = destinosHabilitados.first;
-      }
-
-      final stockPorDestino = Map<String, dynamic>.from(
-        data['stockPorDestino'] ?? {},
-      );
-      final stockActualDestino =
-          (stockPorDestino[destinoClave] as num?)?.toInt() ?? 0;
-      stockPorDestino[destinoClave] = stockActualDestino + cantidad;
-
-      final nuevoStockTotal = stockPorDestino.values
-          .fold<int>(0, (sum, v) => sum + ((v as num).toInt()));
-
-      final destinosActuales = List<String>.from(data['destinos'] ?? []);
-      for (final d in destinosHabilitados) {
-        if (!destinosActuales.contains(d)) {
-          destinosActuales.add(d);
-        }
       }
 
       await DataMaster().registrarRecepcion(
@@ -188,9 +168,6 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
         codigo: codigo,
         destinoClave: destinoClave,
         destinos: destinosHabilitados,
-        nuevoStock: nuevoStockTotal,
-        stockPorDestino: stockPorDestino,
-        destinosProducto: destinosActuales,
       );
 
       setState(() {
@@ -271,7 +248,8 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
                         ),
                       ),
                     ..._resultados.map((doc) {
-                      final expandido = _expandidoId == _docId(doc);
+                      final expandido =
+                          _expandidoId == (doc['id']?.toString() ?? '');
                       return _buildProductoItem(doc, expandido);
                     }),
                   ],
@@ -284,11 +262,8 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
     );
   }
 
-  Widget _buildProductoItem(
-    Map<String, dynamic> data,
-    bool expandido,
-  ) {
-    final id = _docId(data);
+  Widget _buildProductoItem(Map<String, dynamic> data, bool expandido) {
+    final id = data['id']?.toString() ?? '';
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.only(bottom: 12),
@@ -298,7 +273,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
         border: Border.all(
           color: expandido
               ? AppColors.primary
-              : AppColors.primary.withOpacity(0.3),
+              : AppColors.primary.withValues(alpha: 0.3),
           width: expandido ? 2 : 1,
         ),
       ),
@@ -460,10 +435,11 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
                         return Container(
                           decoration: BoxDecoration(
                             color: activo
-                                ? AppColors.primary.withOpacity(0.05)
+                                ? AppColors.primary.withValues(alpha: 0.05)
                                 : Colors.white,
                             border: Border(
-                              top: BorderSide(color: Colors.grey.shade200),
+                              top: BorderSide(
+                                  color: Colors.grey.shade200),
                             ),
                           ),
                           child: SwitchListTile(
@@ -566,7 +542,8 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
     );
   }
 
-  Widget _buildChip(String label, bool seleccionado, Function(bool) onTap) {
+  Widget _buildChip(
+      String label, bool seleccionado, Function(bool) onTap) {
     return GestureDetector(
       onTap: () => onTap(!seleccionado),
       child: AnimatedContainer(
@@ -593,7 +570,7 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

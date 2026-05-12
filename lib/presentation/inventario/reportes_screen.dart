@@ -31,14 +31,11 @@ class _ReportesScreenState extends State<ReportesScreen> {
     _cargarPrefijos();
   }
 
-  Future<void> _cargarPrefijos() async {
-    final config = await DataMaster().obtenerConfig('prefijos');
-    final usados = (config?['usados'] as List<dynamic>? ?? [])
-        .map((e) => e.toString())
-        .toList()
-      ..sort();
+    Future<void> _cargarPrefijos() async {
+    final usados = await DataMaster().obtenerPrefijosUsados();
     if (mounted) setState(() => _prefijosUsados = usados);
   }
+
 
   Future<Map<String, Map<String, int>>> _obtenerStockPorCodigo(
     List<String> prefijos,
@@ -102,7 +99,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
         stockPorCodigo = await _obtenerStockPorCodigo(prefijosActivos);
         final idsConCodigo = stockPorCodigo.keys.toSet();
         docs = docs.where((d) {
-          final id = d['firestoreId']?.toString() ?? d['id']?.toString() ?? '';
+                    final id = d['id']?.toString() ?? '';
           return idsConCodigo.contains(id);
         }).toList();
       }
@@ -207,8 +204,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                         .toList(),
                   ),
                   ...docs.map((data) {
-                    final docId =
-                        data['firestoreId']?.toString() ?? data['id']?.toString() ?? '';
+                                        final docId = data['id']?.toString() ?? '';
                     int stockMostrar;
                     if (prefijosActivos.isNotEmpty &&
                         stockPorCodigo.containsKey(docId)) {

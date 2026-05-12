@@ -88,7 +88,8 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar destino'),
-        content: const Text('¿Estás seguro? Esta acción no se puede deshacer.'),
+        content: const Text(
+            '¿Estás seguro? Esta acción no se puede deshacer.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -161,7 +162,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                           padding: const EdgeInsets.all(12),
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.1),
+                            color: Colors.red.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: Colors.red),
                           ),
@@ -209,8 +210,8 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                       ..._destinos.map((d) => _buildDestinoItem(
                             nombre: d['nombre'] ?? '',
                             editable: true,
-                            onEliminar: () => _eliminar(
-                                d['firestoreId'] ?? d['id']?.toString() ?? ''),
+                            onEliminar: () =>
+                                _eliminar(d['id']?.toString() ?? ''),
                           )),
                     ],
                   ),
@@ -234,7 +235,8 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -259,7 +261,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(

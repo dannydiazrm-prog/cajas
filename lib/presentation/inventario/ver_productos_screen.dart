@@ -39,14 +39,11 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
     super.dispose();
   }
 
-  Future<void> _cargarPrefijos() async {
-    final config = await DataMaster().obtenerConfig('prefijos');
-    final usados = (config?['usados'] as List<dynamic>? ?? [])
-        .map((e) => e.toString())
-        .toList()
-      ..sort();
+    Future<void> _cargarPrefijos() async {    
+    final usados = await DataMaster().obtenerPrefijosUsados();
     if (mounted) setState(() => _prefijosUsados = usados);
   }
+
 
   Future<Map<String, Map<String, int>>> _obtenerStockPorCodigo(
     List<String> prefijos,
@@ -72,8 +69,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
     return resultado;
   }
 
-  String _docId(Map<String, dynamic> d) =>
-      d['firestoreId']?.toString() ?? d['id']?.toString() ?? '';
+    String _docId(Map<String, dynamic> d) => d['id']?.toString() ?? '';
 
   Future<void> _buscar() async {
     setState(() {
@@ -156,8 +152,8 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
     final pinIngresado = await _pedirPin();
     if (pinIngresado == null) return;
 
-    final pinConfig = await DataMaster().obtenerConfig('pin');
-    final pinGuardado = pinConfig?['valor']?.toString() ?? '';
+    final pinGuardado = await DataMaster().obtenerPin();
+
 
     if (pinIngresado != pinGuardado) {
       if (mounted) {
@@ -615,9 +611,9 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: bajominimo
+                    color: bajominimo
               ? Colors.orange
-              : AppColors.primary.withOpacity(0.3),
+              : AppColors.primary.withValues(alpha: 0.3),
           width: bajominimo ? 2 : 1,
         ),
       ),
