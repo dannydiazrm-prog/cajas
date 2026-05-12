@@ -34,8 +34,13 @@ class _PinScreenState extends State<PinScreen> {
   Future<void> _validarPin() async {
     setState(() => _loading = true);
     try {
-      final pinGuardado = await DataMaster().leerConfig('pin') ?? '';
-      if (_pin == pinGuardado) {
+      // Se cambió la lógica para que si leerConfig devuelve null o vacío, use '1234' por defecto
+      final resultadoLocal = await DataMaster().leerConfig('pin');
+      final pinCorrecto = (resultadoLocal != null && resultadoLocal.isNotEmpty) 
+          ? resultadoLocal 
+          : '1234';
+
+      if (_pin == pinCorrecto) {
         if (mounted) context.go('/');
       } else {
         setState(() {

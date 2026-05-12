@@ -12,8 +12,9 @@ void main() async {
 
   await Firebase.initializeApp();
 
-  // Inicializar la base de datos local (Drift) antes de arrancar la app
-  await DataMaster().init();
+  final maestro = DataMaster();
+  await maestro.init();
+  await maestro.inicializar();
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
