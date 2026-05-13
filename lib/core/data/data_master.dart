@@ -695,7 +695,7 @@ class DataMaster {
   // AJUSTES
   // ─────────────────────────────────────────
 
-  Future<void> registrarAjuste({
+    Future<void> registrarAjuste({
     required String tipo,
     required String tipoAjuste,
     required String productoId,
@@ -704,7 +704,7 @@ class DataMaster {
     required String idioma,
     required int cantidad,
     required String motivo,
-    required String destinoId, // NUEVO — obligatorio
+    required List<String> destinosIds, // Cambiado a List para soportar la selección múltiple
     String? lote,
     String? companero,
     String? retiroId,
@@ -713,12 +713,28 @@ class DataMaster {
     final producto = await obtenerProductoPorId(productoId);
     if (producto == null) return;
 
-    final stockAnterior = producto['stockActual'] as int;
-    final nuevoStock = tipoAjuste == 'suma'
-        ? stockAnterior + cantidad
-        : (stockAnterior - cantidad).clamp(0, double.infinity).toInt();
+    // Recuperamos el mapa de habilitaciones actual
+    Map<String, int> stockPorDestino = {};
+    if (producto['stockPorDestino'] != null && producto['stockPorDestino'].toString().isNotEmpty) {
+      stockPorDestino = Map<String, int>.from(jsonDecode(producto['stockPorDestino']));
+    }
 
-    // stockPorDestino ya no se usa para cantidades — solo stockActual
+    final stockAnterior = producto['stockActual'] as int;
+    int nuevoStockTotal = stockAnterior;
+
+    // Aplicamos el ajuste de forma inteligente al total y a cada destino marcado
+    if (tipoAjuste == 'suma') {
+      nuevoStockTotal += cantidad;
+      for (var dId in destinosIds) {
+        stockPorDestino[dId] = (stockPorDestino[dId] ?? 0) + cantidad;
+      }
+    } else {
+      nuevoStockTotal = (stockAnterior - cantidad).clamp(0, 9999999).toInt();
+      for (var dId in destinosIds) {
+        int stockEnDestino = stockPorDestino[dId] ?? 0;
+        stockPorDestino[dId] = (stockEnDestino - cantidad).clamp(0, 9999999).toInt();
+      }
+    }
 
     final id = 'local_${DateTime.now().millisecondsSinceEpoch}';
     final fecha = DateTime.now().toIso8601String();
@@ -735,8 +751,8 @@ class DataMaster {
         'cantidad': cantidad,
         'motivo': motivo,
         'stockAnterior': stockAnterior,
-        'stockNuevo': nuevoStock,
-        'destinoId': destinoId, 
+        'stockNuevo': nuevoStockTotal,
+        'destinoId': destinosIds.join(','), // Guardamos los IDs seleccionados
         'lote': lote,
         'companero': companero,
         'retiroId': retiroId,
@@ -747,7 +763,8 @@ class DataMaster {
       await txn.update(
         'productos',
         {
-          'stockActual': nuevoStock,
+          'stockActual': nuevoStockTotal,
+          'stockPorDestino': jsonEncode(stockPorDestino), // Actualizamos las habilitaciones
           'sincronizado': 0,
         },
         where: 'id = ?',
@@ -787,6 +804,7 @@ class DataMaster {
 
     return rows.map((r) => Map<String, dynamic>.from(r)).toList();
   }
+
 
   // ─────────────────────────────────────────
   // PREFIJOS

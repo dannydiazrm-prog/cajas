@@ -17,11 +17,6 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
   String _error = '';
   List<Map<String, dynamic>> _destinos = [];
 
-  final List<Map<String, dynamic>> _destinosDefecto = [
-    {'nombre': 'Todos', 'editable': false},
-    {'nombre': 'Local', 'editable': false},
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -37,10 +32,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
   Future<void> _cargarDestinos() async {
     final lista = await DataMaster().obtenerDestinos();
     if (mounted) {
-      setState(() => _destinos = lista
-          .where((d) =>
-              d['nombre'] != 'Todos' && d['nombre'] != 'Local')
-          .toList());
+      setState(() => _destinos = lista);
     }
   }
 
@@ -52,9 +44,13 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
       return;
     }
 
-    if (nombre.toLowerCase() == 'todos' ||
-        nombre.toLowerCase() == 'local') {
-      setState(() => _error = 'Ese nombre está reservado');
+    // Verificar que no exista ya un destino con el mismo nombre
+    final yaExiste = _destinos.any(
+      (d) => (d['nombre'] ?? '').toString().toLowerCase() ==
+          nombre.toLowerCase(),
+    );
+    if (yaExiste) {
+      setState(() => _error = 'Ya existe un destino con ese nombre');
       return;
     }
 
@@ -80,10 +76,12 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
       setState(() => _error = 'Error al guardar. Intentá de nuevo.');
     }
 
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _eliminar(String id) async {
+  Future<void> _eliminar(String id, bool editable) async {
+    if (!editable) return;
+
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -140,7 +138,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                         controller: _nombreController,
                         textCapitalization: TextCapitalization.sentences,
                         decoration: InputDecoration(
-                          hintText: 'Ej: Fondilac, Riegos Modernos',
+                          hintText: 'Ej: Fondilac, Local, Riegos Modernos',
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
@@ -203,16 +201,30 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      ..._destinosDefecto.map((d) => _buildDestinoItem(
-                            nombre: d['nombre'],
-                            editable: false,
-                          )),
-                      ..._destinos.map((d) => _buildDestinoItem(
-                            nombre: d['nombre'] ?? '',
-                            editable: true,
-                            onEliminar: () =>
-                                _eliminar(d['id']?.toString() ?? ''),
-                          )),
+                      if (_destinos.isEmpty)
+                        const Center(
+                          child: Text(
+                            'No hay destinos creados todavía',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ..._destinos.map((d) {
+                        final editable =
+                            (d['editable'] == 1 || d['editable'] == true);
+                        return _buildDestinoItem(
+                          nombre: d['nombre']?.toString() ?? '',
+                          editable: editable,
+                          onEliminar: editable
+                              ? () => _eliminar(
+                                    d['id']?.toString() ?? '',
+                                    editable,
+                                  )
+                              : null,
+                        );
+                      }),
                     ],
                   ),
                 ),
@@ -256,23 +268,6 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
               ),
             ),
           ),
-          if (!editable)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'DEFAULT',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
           if (editable && onEliminar != null)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),

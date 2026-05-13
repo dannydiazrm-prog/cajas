@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/data/data_master.dart';
@@ -31,11 +32,8 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   bool _guardando = false;
   String _error = '';
 
-  // Destinos — se cargan todos una vez y se filtran al seleccionar producto
-  List<Map<String, dynamic>> _todosLosDestinos = [];
-  List<Map<String, dynamic>> _destinosDelProducto = [];
-  String? _destinoSeleccionadoId;
-  String? _destinoSeleccionadoNombre;
+  // NUEVA LÓGICA: Selección inteligente de destinos habilitados
+  Map<String, bool> _destinosSeleccionados = {};
 
   final List<String> _motivosResta = [
     'Producto dañado',
@@ -54,24 +52,6 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   @override
   void initState() {
     super.initState();
-    _cargarTodosLosDestinos();
-  }
-
-  Future<void> _cargarTodosLosDestinos() async {
-    final destinos = await DataMaster().obtenerDestinos();
-    setState(() => _todosLosDestinos = destinos);
-  }
-
-  void _filtrarDestinosPorProducto(Map<String, dynamic> producto) {
-    // Solo muestra los destinos habilitados para este producto
-    final idsHabilitados = List<String>.from(producto['destinos'] ?? []);
-    setState(() {
-      _destinosDelProducto = _todosLosDestinos
-          .where((d) => idsHabilitados.contains(d['id']?.toString()))
-          .toList();
-      _destinoSeleccionadoId = null;
-      _destinoSeleccionadoNombre = null;
-    });
   }
 
   @override
@@ -113,6 +93,31 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     });
   }
 
+  void _seleccionarProducto(Map<String, dynamic> producto) {
+    // Leemos el mapa de stock para saber qué destinos están habilitados
+    Map<String, dynamic> stockMapa = {};
+    if (producto['stockPorDestino'] != null && producto['stockPorDestino'].toString().isNotEmpty) {
+      stockMapa = Map<String, dynamic>.from(jsonDecode(producto['stockPorDestino']));
+    }
+
+    setState(() {
+      _productoSeleccionado = producto;
+      _buscado = false;
+      _resultados = [];
+      _nombreController.clear();
+      _tipoAjuste = null;
+      _motivo = null;
+      _cantidadController.clear();
+      _otroController.clear();
+      _error = '';
+
+      // Creamos los checks: solo aparecerán los destinos que ya existen en el producto
+      _destinosSeleccionados = {
+        for (var nombre in stockMapa.keys) nombre: false
+      };
+    });
+  }
+
   Future<void> _confirmar() async {
     final cantidad = int.tryParse(_cantidadController.text.trim());
     if (cantidad == null || cantidad <= 0) {
@@ -123,10 +128,18 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
       setState(() => _error = 'Selecciona si es suma o resta');
       return;
     }
-    if (_destinoSeleccionadoId == null) {
-      setState(() => _error = 'Selecciona un destino');
+
+    // Obtenemos la lista de destinos seleccionados (los marcados con check)
+    final listaDestinos = _destinosSeleccionados.entries
+        .where((e) => e.value == true)
+        .map((e) => e.key)
+        .toList();
+
+    if (listaDestinos.isEmpty) {
+      setState(() => _error = 'Selecciona al menos un destino');
       return;
     }
+
     if (_motivo == null) {
       setState(() => _error = 'Selecciona un motivo');
       return;
@@ -138,7 +151,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
 
     final data = _productoSeleccionado!;
 
-    // Validar contra stock global
+    // Validar contra stock global si es resta
     if (_tipoAjuste == 'resta') {
       final stockActual = (data['stockActual'] as num?)?.toInt() ?? 0;
       if (cantidad > stockActual) {
@@ -166,7 +179,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
         idioma: data['idioma'] as String,
         cantidad: cantidad,
         motivo: motivoFinal,
-        destinoId: _destinoSeleccionadoId!,
+        destinosIds: listaDestinos, // Enviamos la LISTA al DataMaster
       );
 
       if (mounted) {
@@ -293,18 +306,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                setState(() {
-                  _productoSeleccionado = data;
-                  _tipoAjuste = null;
-                  _motivo = null;
-                  _cantidadController.clear();
-                  _otroController.clear();
-                  _error = '';
-                });
-                // Filtrar destinos según los habilitados para este producto
-                _filtrarDestinosPorProducto(data);
-              },
+              onTap: () => _seleccionarProducto(data),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -407,7 +409,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                         const SizedBox(width: 8),
                         _buildTagBlanco(data['idioma'] ?? ''),
                         const SizedBox(width: 8),
-                        _buildTagBlanco('Stock actual: $stock'),
+                        _buildTagBlanco('Stock: $stock'),
                       ],
                     ),
                   ],
@@ -417,9 +419,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: () => setState(() {
                   _productoSeleccionado = null;
-                  _destinosDelProducto = [];
-                  _destinoSeleccionadoId = null;
-                  _destinoSeleccionadoNombre = null;
+                  _destinosSeleccionados = {};
                 }),
               ),
             ],
@@ -531,7 +531,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
 
         if (_tipoAjuste != null) ...[
           const Text(
-            'DESTINO',
+            'DESTINOS HABILITADOS',
             style: TextStyle(
               color: AppColors.primary,
               fontSize: 13,
@@ -540,7 +540,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          if (_destinosDelProducto.isEmpty)
+          if (_destinosSeleccionados.isEmpty)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -549,7 +549,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                 border: Border.all(color: Colors.orange),
               ),
               child: const Text(
-                'Este producto no tiene destinos habilitados. Realizá una recepción primero.',
+                'Sin destinos habilitados en el sistema para este producto.',
                 style: TextStyle(
                   color: Colors.orange,
                   fontSize: 12,
@@ -558,36 +558,25 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
               ),
             )
           else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _destinosDelProducto.map((d) {
-                final id = d['id'] as String;
-                final nombre = d['nombre'] as String;
-                final seleccionado = _destinoSeleccionadoId == id;
-                return GestureDetector(
-                  onTap: () => setState(() {
-                    _destinoSeleccionadoId = id;
-                    _destinoSeleccionadoNombre = nombre;
-                  }),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: seleccionado ? AppColors.primary : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.primary),
-                    ),
-                    child: Text(
-                      nombre,
-                      style: TextStyle(
-                        color:
-                            seleccionado ? Colors.white : AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+            Column(
+              children: _destinosSeleccionados.keys.map((nombre) {
+                return CheckboxListTile(
+                  title: Text(
+                    nombre,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                  value: _destinosSeleccionados[nombre],
+                  activeColor: AppColors.primary,
+                  onChanged: (bool? value) {
+                    setState(() {
+                      _destinosSeleccionados[nombre] = value ?? false;
+                    });
+                  },
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
                 );
               }).toList(),
             ),
