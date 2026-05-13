@@ -114,20 +114,16 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     final data = _retiroSeleccionado!;
     final productoId = data['productoId'] as String;
 
-    // Verificar stock en el destino del retiro
+    // Verificar stock global
     final producto = await DataMaster().obtenerProductoPorId(productoId);
-    final destinoId = data['destinoId'] as String? ?? '';
-    final stockPorDestino =
-        Map<String, dynamic>.from(producto?['stockPorDestino'] ?? {});
-    final stockEnDestino =
-        (stockPorDestino[destinoId] as num?)?.toInt() ?? 0;
+    final stockDisponible = (producto?['stockActual'] as num?)?.toInt() ?? 0;
 
-    if (cantidad > stockEnDestino) {
+    if (cantidad > stockDisponible) {
       setState(() =>
-          _error = 'Stock insuficiente en este destino: $stockEnDestino unidades');
+          _error = 'Stock insuficiente. Stock disponible: $stockDisponible');
       return;
     }
-	
+
     setState(() {
       _guardando = true;
       _error = '';
@@ -421,7 +417,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         const SizedBox(height: 24),
 
         const Text(
-          'CANTIDAD A REPONER',
+          'CANTIDAD A DESCONTAR',
           style: TextStyle(
             color: AppColors.primary,
             fontSize: 13,

@@ -24,13 +24,16 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   Map<String, dynamic>? _productoSeleccionado;
 
   // Formulario
-  String? _tipoAjuste; // 'suma' o 'resta'
+  String? _tipoAjuste;
   final _cantidadController = TextEditingController();
   String? _motivo;
   final _otroController = TextEditingController();
   bool _guardando = false;
   String _error = '';
-  List<Map<String, dynamic>> _destinos = [];
+
+  // Destinos — se cargan todos una vez y se filtran al seleccionar producto
+  List<Map<String, dynamic>> _todosLosDestinos = [];
+  List<Map<String, dynamic>> _destinosDelProducto = [];
   String? _destinoSeleccionadoId;
   String? _destinoSeleccionadoNombre;
 
@@ -51,12 +54,24 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   @override
   void initState() {
     super.initState();
-    _cargarDestinos();
+    _cargarTodosLosDestinos();
   }
 
-  Future<void> _cargarDestinos() async {
+  Future<void> _cargarTodosLosDestinos() async {
     final destinos = await DataMaster().obtenerDestinos();
-    setState(() => _destinos = destinos);
+    setState(() => _todosLosDestinos = destinos);
+  }
+
+  void _filtrarDestinosPorProducto(Map<String, dynamic> producto) {
+    // Solo muestra los destinos habilitados para este producto
+    final idsHabilitados = List<String>.from(producto['destinos'] ?? []);
+    setState(() {
+      _destinosDelProducto = _todosLosDestinos
+          .where((d) => idsHabilitados.contains(d['id']?.toString()))
+          .toList();
+      _destinoSeleccionadoId = null;
+      _destinoSeleccionadoNombre = null;
+    });
   }
 
   @override
@@ -75,7 +90,6 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     });
 
     final todos = await DataMaster().obtenerProductos();
-
     final nombre = _nombreController.text.trim().toLowerCase();
 
     final filtrados = todos.where((p) {
@@ -123,15 +137,15 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     }
 
     final data = _productoSeleccionado!;
-    final stockPorDestino =
-        Map<String, dynamic>.from(data['stockPorDestino'] ?? {});
-    final stockEnDestino =
-        (stockPorDestino[_destinoSeleccionadoId] as num?)?.toInt() ?? 0;
 
-    if (_tipoAjuste == 'resta' && cantidad > stockEnDestino) {
-      setState(() => _error =
-          'Stock insuficiente en $_destinoSeleccionadoNombre: $stockEnDestino unidades');
-      return;
+    // Validar contra stock global
+    if (_tipoAjuste == 'resta') {
+      final stockActual = (data['stockActual'] as num?)?.toInt() ?? 0;
+      if (cantidad > stockActual) {
+        setState(() => _error =
+            'Stock insuficiente. Stock disponible: $stockActual unidades');
+        return;
+      }
     }
 
     setState(() {
@@ -279,14 +293,18 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () => setState(() {
-                _productoSeleccionado = data;
-                _tipoAjuste = null;
-                _motivo = null;
-                _cantidadController.clear();
-                _otroController.clear();
-                _error = '';
-              }),
+              onTap: () {
+                setState(() {
+                  _productoSeleccionado = data;
+                  _tipoAjuste = null;
+                  _motivo = null;
+                  _cantidadController.clear();
+                  _otroController.clear();
+                  _error = '';
+                });
+                // Filtrar destinos según los habilitados para este producto
+                _filtrarDestinosPorProducto(data);
+              },
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -397,8 +415,12 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () =>
-                    setState(() => _productoSeleccionado = null),
+                onPressed: () => setState(() {
+                  _productoSeleccionado = null;
+                  _destinosDelProducto = [];
+                  _destinoSeleccionadoId = null;
+                  _destinoSeleccionadoNombre = null;
+                }),
               ),
             ],
           ),
@@ -518,38 +540,57 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _destinos.map((d) {
-              final id = d['id'] as String;
-              final nombre = d['nombre'] as String;
-              final seleccionado = _destinoSeleccionadoId == id;
-              return GestureDetector(
-                onTap: () => setState(() {
-                  _destinoSeleccionadoId = id;
-                  _destinoSeleccionadoNombre = nombre;
-                }),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: seleccionado ? AppColors.primary : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.primary),
-                  ),
-                  child: Text(
-                    nombre,
-                    style: TextStyle(
-                      color: seleccionado ? Colors.white : AppColors.primary,
-                      fontWeight: FontWeight.w600,
+          if (_destinosDelProducto.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange),
+              ),
+              child: const Text(
+                'Este producto no tiene destinos habilitados. Realizá una recepción primero.',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _destinosDelProducto.map((d) {
+                final id = d['id'] as String;
+                final nombre = d['nombre'] as String;
+                final seleccionado = _destinoSeleccionadoId == id;
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    _destinoSeleccionadoId = id;
+                    _destinoSeleccionadoNombre = nombre;
+                  }),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: seleccionado ? AppColors.primary : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.primary),
+                    ),
+                    child: Text(
+                      nombre,
+                      style: TextStyle(
+                        color:
+                            seleccionado ? Colors.white : AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
+                );
+              }).toList(),
+            ),
           const SizedBox(height: 24),
 
           const Text(
