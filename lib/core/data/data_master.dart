@@ -15,7 +15,7 @@ class DataMaster {
   // INICIALIZACIÓN
   // ─────────────────────────────────────────
 
-      Future<void> init() async {
+        Future<void> init() async {
     _db ??= await _initDb();
   }
 
@@ -37,7 +37,7 @@ class DataMaster {
               'ALTER TABLE productos ADD COLUMN eliminado INTEGER NOT NULL DEFAULT 0');
         }
         if (oldVersion < 3) {
-          // CORRECCIÓN 1: Comillas limpias para evitar errores de compilación/migración
+          // CORRECCIÓN 1: Comillas limpias para evitar errores en SQLite
           await db.execute(
               "ALTER TABLE retiros ADD COLUMN codigoRecepcion TEXT NOT NULL DEFAULT ''");
         }
@@ -61,7 +61,8 @@ class DataMaster {
       )
     ''');
 
-    // CORRECCIÓN 2: Se renombró a 'destinos' manteniendo tu estructura idéntica
+    // CORRECCIÓN 2: Esta era la tabla que estaba duplicada en tu código original. 
+    // Como abajo ya tenías la de recepciones, a esta le correspondía llamarse 'destinos'.
     await db.execute('''
       CREATE TABLE destinos (
         id TEXT PRIMARY KEY,
@@ -92,11 +93,12 @@ class DataMaster {
         estado TEXT NOT NULL DEFAULT 'cerrado',
         fecha TEXT NOT NULL,
         fechaCierre TEXT,
-        codigoRecepcion TEXT NOT NULL DEFAULT '', // Incluido para nuevas instalaciones v3
+        codigoRecepcion TEXT NOT NULL DEFAULT '',
         sincronizado INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
+    // Esta se queda intacta como tu tabla de recepciones (ingresos) original
     await db.execute('''
       CREATE TABLE recepciones (
         id TEXT PRIMARY KEY,
@@ -113,7 +115,7 @@ class DataMaster {
       )
     ''');
 
-    // EXACTAMENTE TU ESTRUCTURA ORIGINAL SIN ALTERACIONES
+    // Tu tabla original de ajustes con el lote, compañero, etc. exactamente en su lugar
     await db.execute('''
       CREATE TABLE ajustes (
         id TEXT PRIMARY KEY,
@@ -142,6 +144,7 @@ class DataMaster {
       )
     ''');
   }
+
 
   // ─────────────────────────────────────────
   // INICIALIZAR APP — descargar datos frescos
