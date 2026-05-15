@@ -40,25 +40,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   Future<Map<String, Map<String, int>>> _obtenerStockPorCodigo(
     List<String> prefijos,
   ) async {
-    final Map<String, Map<String, int>> resultado = {};
-    final recepciones = await DataMaster().obtenerRecepciones();
-
-    for (final data in recepciones) {
-      final codigo = (data['codigo'] ?? '').toString();
-      final productoId = data['productoId']?.toString();
-      final cantidad = (data['cantidad'] as num?)?.toInt() ?? 0;
-
-      if (productoId == null || codigo.length < 2) continue;
-
-      final prefijo = codigo.substring(0, 2);
-      if (!prefijos.contains(prefijo)) continue;
-
-      resultado.putIfAbsent(productoId, () => {});
-      resultado[productoId]![prefijo] =
-          (resultado[productoId]![prefijo] ?? 0) + cantidad;
-    }
-
-    return resultado;
+    return DataMaster().obtenerStockRealPorPrefijo(prefijos);
   }
 
   Future<void> _generarPDF() async {
@@ -186,7 +168,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                       'TIPO',
                       'IDIOMA',
                       'STOCK',
-                      'STOCK MÍNIMO',
+                      'CONTEO',
                     ]
                         .map(
                           (h) => pw.Padding(
@@ -227,7 +209,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                         data['tipo'] ?? '',
                         data['idioma'] ?? '',
                         stockMostrar.toString(),
-                        '1000',
+                        '',
                       ]
                           .map(
                             (v) => pw.Padding(

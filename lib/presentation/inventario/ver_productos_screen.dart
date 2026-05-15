@@ -48,25 +48,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
   Future<Map<String, Map<String, int>>> _obtenerStockPorCodigo(
     List<String> prefijos,
   ) async {
-    final Map<String, Map<String, int>> resultado = {};
-    final recepciones = await DataMaster().obtenerRecepciones();
-
-    for (final data in recepciones) {
-      final codigo = (data['codigo'] ?? '').toString();
-      final productoId = data['productoId']?.toString();
-      final cantidad = (data['cantidad'] as num?)?.toInt() ?? 0;
-
-      if (productoId == null || codigo.length < 2) continue;
-
-      final prefijo = codigo.substring(0, 2);
-      if (!prefijos.contains(prefijo)) continue;
-
-      resultado.putIfAbsent(productoId, () => {});
-      resultado[productoId]![prefijo] =
-          (resultado[productoId]![prefijo] ?? 0) + cantidad;
-    }
-
-    return resultado;
+    return DataMaster().obtenerStockRealPorPrefijo(prefijos);
   }
 
     String _docId(Map<String, dynamic> d) => d['id']?.toString() ?? '';

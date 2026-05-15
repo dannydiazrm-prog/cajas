@@ -533,6 +533,40 @@ class DataMaster {
     return resultado;
   }
 
+  Future<List<Map<String, dynamic>>> obtenerCombinacionesRecepcion(
+      String productoId) async {
+    final database = await db;
+    final rows = await database.query(
+      'recepciones',
+      where: 'productoId = ?',
+      whereArgs: [productoId],
+      orderBy: 'fecha ASC',
+    );
+
+    final Map<String, Map<String, dynamic>> combinaciones = {};
+
+    for (final row in rows) {
+      final destinos = List<String>.from(
+        jsonDecode(row['destinos'] as String? ?? '[]') as List,
+      );
+      final clave = (List<String>.from(destinos)..sort()).join(',');
+
+      if (combinaciones.containsKey(clave)) {
+        combinaciones[clave]!['cantidad'] =
+            (combinaciones[clave]!['cantidad'] as int) +
+                ((row['cantidad'] as num?)?.toInt() ?? 0);
+      } else {
+        combinaciones[clave] = {
+          'destinosIds': destinos,
+          'cantidad': (row['cantidad'] as num?)?.toInt() ?? 0,
+          'clave': clave,
+        };
+      }
+    }
+
+    return combinaciones.values.toList();
+  }
+
   // ─────────────────────────────────────────
   // RETIROS
   // ─────────────────────────────────────────
@@ -814,6 +848,57 @@ class DataMaster {
     final valor = await leerConfig('prefijos_usados');
     if (valor == null) return [];
     return List<String>.from(jsonDecode(valor));
+  }
+
+  // Calcula el stock real por prefijo descontando retiros
+  Future<Map<String, Map<String, int>>> obtenerStockRealPorPrefijo(
+      List<String> prefijos) async {
+    final database = await db;
+
+    // Sumar recepciones por productoId y prefijo
+    final recepciones = await database.query('recepciones');
+    final Map<String, Map<String, int>> stockPorPrefijo = {};
+
+    for (final r in recepciones) {
+      final codigo = (r['codigo'] ?? '').toString();
+      final productoId = r['productoId']?.toString();
+      final cantidad = (r['cantidad'] as num?)?.toInt() ?? 0;
+      if (productoId == null || codigo.length < 2) continue;
+      final prefijo = codigo.substring(0, 2);
+      if (!prefijos.contains(prefijo)) continue;
+      stockPorPrefijo.putIfAbsent(productoId, () => {});
+      stockPorPrefijo[productoId]![prefijo] =
+          (stockPorPrefijo[productoId]![prefijo] ?? 0) + cantidad;
+    }
+
+    // Descontar retiros cerrados por productoId
+    final retiros = await database.query(
+      'retiros',
+      where: 'estado = ?',
+      whereArgs: ['cerrado'],
+    );
+
+    for (final r in retiros) {
+      final productoId = r['productoId']?.toString();
+      final consumo = (r['consumoReal'] as num?)?.toInt() ?? 0;
+      if (productoId == null || consumo <= 0) continue;
+      if (!stockPorPrefijo.containsKey(productoId)) continue;
+
+      // Descontar proporcionalmente del prefijo con más stock
+      final mapa = stockPorPrefijo[productoId]!;
+      int restante = consumo;
+      final claves = mapa.keys.toList()
+        ..sort((a, b) => (mapa[b] ?? 0).compareTo(mapa[a] ?? 0));
+      for (final clave in claves) {
+        if (restante <= 0) break;
+        final disponible = mapa[clave] ?? 0;
+        final descontar = restante > disponible ? disponible : restante;
+        mapa[clave] = disponible - descontar;
+        restante -= descontar;
+      }
+    }
+
+    return stockPorPrefijo;
   }
 
   Future<void> _agregarPrefijo(String prefijo) async {

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/data/data_master.dart';
@@ -32,8 +31,12 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   bool _guardando = false;
   String _error = '';
 
-  // Control de destinos
-  Map<String, bool> _destinosSeleccionados = {};
+  // Combinaciones de destinos por recepción
+  List<Map<String, dynamic>> _combinaciones = [];
+  Map<String, dynamic>? _combinacionSeleccionada;
+
+  // Mapa de nombre por ID de destino para mostrar en pantalla
+  Map<String, String> _nombresDestinos = {};
 
   final List<String> _motivosResta = [
     'Producto dañado',
@@ -52,6 +55,36 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   @override
   void initState() {
     super.initState();
+    _cargarNombresDestinos();
+  }
+
+  Future<void> _cargarNombresDestinos() async {
+    final destinos = await DataMaster().obtenerDestinos();
+    setState(() {
+      _nombresDestinos = {
+        for (final d in destinos)
+          d['id'].toString(): d['nombre'].toString(),
+      };
+    });
+  }
+
+  Future<void> _seleccionarProducto(Map<String, dynamic> producto) async {
+    final combinaciones = await DataMaster()
+        .obtenerCombinacionesRecepcion(producto['id'] as String);
+
+    setState(() {
+      _combinaciones = combinaciones;
+      _combinacionSeleccionada = null;
+      _productoSeleccionado = producto;
+      _buscado = false;
+      _resultados = [];
+      _nombreController.clear();
+      _tipoAjuste = null;
+      _motivo = null;
+      _cantidadController.clear();
+      _otroController.clear();
+      _error = '';
+    });
   }
 
   @override
@@ -93,42 +126,9 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     });
   }
 
-  Future<void> _seleccionarProducto(Map<String, dynamic> producto) async {
-    // 1. Intentamos leer los destinos que ya tienen stock (Habilitados)
-    Map<String, dynamic> stockMapa = {};
-    if (producto['stockPorDestino'] != null && producto['stockPorDestino'].toString().isNotEmpty) {
-      stockMapa = Map<String, dynamic>.from(jsonDecode(producto['stockPorDestino']));
-    }
-
-    // 2. Si el producto no tiene NINGÚN destino previo, cargamos todos los del sistema
-    // para que el operario pueda habilitarlo por primera vez.
-    if (stockMapa.isEmpty) {
-      final todosLosDestinos = await DataMaster().obtenerDestinos();
-      setState(() {
-        _destinosSeleccionados = {
-          for (var d in todosLosDestinos) (d['nombre'] as String): false
-        };
-      });
-    } else {
-      // Si ya tiene, solo mostramos los habilitados
-      setState(() {
-        _destinosSeleccionados = {
-          for (var nombre in stockMapa.keys) nombre: false
-        };
-      });
-    }
-
-    setState(() {
-      _productoSeleccionado = producto;
-      _buscado = false;
-      _resultados = [];
-      _nombreController.clear();
-      _tipoAjuste = null;
-      _motivo = null;
-      _cantidadController.clear();
-      _otroController.clear();
-      _error = '';
-    });
+  String _nombresCombinacion(List<String> ids) {
+    final nombres = ids.map((id) => _nombresDestinos[id] ?? id).toList();
+    return nombres.join(' · ');
   }
 
   Future<void> _confirmar() async {
@@ -141,17 +141,10 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
       setState(() => _error = 'Selecciona si es suma o resta');
       return;
     }
-
-    final listaDestinos = _destinosSeleccionados.entries
-        .where((e) => e.value == true)
-        .map((e) => e.key)
-        .toList();
-
-    if (listaDestinos.isEmpty) {
-      setState(() => _error = 'Selecciona al menos un destino');
+    if (_combinacionSeleccionada == null) {
+      setState(() => _error = 'Selecciona una combinación de destinos');
       return;
     }
-
     if (_motivo == null) {
       setState(() => _error = 'Selecciona un motivo');
       return;
@@ -162,6 +155,8 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     }
 
     final data = _productoSeleccionado!;
+    final destinosIds =
+        List<String>.from(_combinacionSeleccionada!['destinosIds'] as List);
 
     if (_tipoAjuste == 'resta') {
       final stockActual = (data['stockActual'] as num?)?.toInt() ?? 0;
@@ -190,7 +185,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
         idioma: data['idioma'] as String,
         cantidad: cantidad,
         motivo: motivoFinal,
-        destinosIds: listaDestinos,
+        destinosIds: destinosIds,
       );
 
       if (mounted) {
@@ -249,8 +244,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
           controller: _nombreController,
           decoration: InputDecoration(
             hintText: 'Buscar por nombre',
-            prefixIcon:
-                const Icon(Icons.search, color: AppColors.primary),
+            prefixIcon: const Icon(Icons.search, color: AppColors.primary),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
@@ -377,12 +371,12 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   Widget _buildFormulario() {
     final data = _productoSeleccionado!;
     final stock = data['stockActual'] ?? 0;
-    final motivos =
-        _tipoAjuste == 'suma' ? _motivosSuma : _motivosResta;
+    final motivos = _tipoAjuste == 'suma' ? _motivosSuma : _motivosResta;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Producto seleccionado
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -419,7 +413,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                         const SizedBox(width: 8),
                         _buildTagBlanco(data['idioma'] ?? ''),
                         const SizedBox(width: 8),
-                        _buildTagBlanco('Stock: $stock'),
+                        _buildTagBlanco('Stock actual: $stock'),
                       ],
                     ),
                   ],
@@ -429,7 +423,8 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: () => setState(() {
                   _productoSeleccionado = null;
-                  _destinosSeleccionados = {};
+                  _combinaciones = [];
+                  _combinacionSeleccionada = null;
                 }),
               ),
             ],
@@ -437,6 +432,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
         ),
         const SizedBox(height: 24),
 
+        // Tipo de ajuste
         const Text(
           'TIPO DE AJUSTE',
           style: TextStyle(
@@ -459,9 +455,8 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                   duration: const Duration(milliseconds: 200),
                   height: 70,
                   decoration: BoxDecoration(
-                    color: _tipoAjuste == 'suma'
-                        ? Colors.green
-                        : Colors.white,
+                    color:
+                        _tipoAjuste == 'suma' ? Colors.green : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.green, width: 2),
                   ),
@@ -502,9 +497,8 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                   duration: const Duration(milliseconds: 200),
                   height: 70,
                   decoration: BoxDecoration(
-                    color: _tipoAjuste == 'resta'
-                        ? Colors.red
-                        : Colors.white,
+                    color:
+                        _tipoAjuste == 'resta' ? Colors.red : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.red, width: 2),
                   ),
@@ -539,8 +533,9 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
         const SizedBox(height: 24),
 
         if (_tipoAjuste != null) ...[
+          // Selector de combinación de destinos
           const Text(
-            'DESTINOS',
+            'GRUPO DE DESTINOS',
             style: TextStyle(
               color: AppColors.primary,
               fontSize: 13,
@@ -548,31 +543,102 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
               letterSpacing: 1.1,
             ),
           ),
-          const SizedBox(height: 8),
-          Column(
-            children: _destinosSeleccionados.keys.map((nombre) {
-              return CheckboxListTile(
-                title: Text(
-                  nombre,
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                value: _destinosSeleccionados[nombre],
-                activeColor: AppColors.primary,
-                onChanged: (bool? value) {
-                  setState(() {
-                    _destinosSeleccionados[nombre] = value ?? false;
-                  });
-                },
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-              );
-            }).toList(),
+          const SizedBox(height: 4),
+          const Text(
+            'Seleccioná el grupo de destinos al que pertenece este ajuste',
+            style: TextStyle(
+              color: AppColors.primary,
+              fontSize: 11,
+            ),
           ),
+          const SizedBox(height: 12),
+          if (_combinaciones.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange),
+              ),
+              child: const Text(
+                'Este producto no tiene recepciones registradas. Realizá una recepción primero.',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          else
+            Column(
+              children: _combinaciones.map((combinacion) {
+                final ids =
+                    List<String>.from(combinacion['destinosIds'] as List);
+                final clave = combinacion['clave'] as String;
+                final cantidad = combinacion['cantidad'] as int;
+                final seleccionado =
+                    _combinacionSeleccionada?['clave'] == clave;
+
+                return GestureDetector(
+                  onTap: () => setState(
+                      () => _combinacionSeleccionada = combinacion),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color:
+                          seleccionado ? AppColors.primary : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: seleccionado
+                            ? AppColors.primary
+                            : AppColors.primary.withValues(alpha: 0.3),
+                        width: seleccionado ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _nombresCombinacion(ids),
+                                style: TextStyle(
+                                  color: seleccionado
+                                      ? Colors.white
+                                      : AppColors.primary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$cantidad unidades recibidas en este grupo',
+                                style: TextStyle(
+                                  color: seleccionado
+                                      ? Colors.white70
+                                      : Colors.grey[600],
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (seleccionado)
+                          const Icon(Icons.check_circle,
+                              color: Colors.white, size: 20),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           const SizedBox(height: 24),
 
+          // Cantidad
           const Text(
             'CANTIDAD',
             style: TextStyle(
@@ -603,6 +669,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
           ),
           const SizedBox(height: 24),
 
+          // Motivo
           const Text(
             'MOTIVO',
             style: TextStyle(
@@ -625,18 +692,14 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: seleccionado
-                        ? AppColors.primary
-                        : Colors.white,
+                    color: seleccionado ? AppColors.primary : Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: AppColors.primary),
                   ),
                   child: Text(
                     m,
                     style: TextStyle(
-                      color: seleccionado
-                          ? Colors.white
-                          : AppColors.primary,
+                      color: seleccionado ? Colors.white : AppColors.primary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -654,8 +717,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                 fillColor: Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide:
-                      const BorderSide(color: AppColors.primary),
+                  borderSide: const BorderSide(color: AppColors.primary),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -714,8 +776,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
       onTap: () => onTap(!seleccionado),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: seleccionado ? AppColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
