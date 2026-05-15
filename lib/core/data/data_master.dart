@@ -56,8 +56,8 @@ class DataMaster {
         stockPorDestino TEXT NOT NULL DEFAULT '{}',
         destinos TEXT NOT NULL DEFAULT '[]',
         creadoEn TEXT,
-        codigoRecepcion TEXT NOT NULL DEFAULT '',
-        sincronizado INTEGER NOT NULL DEFAULT 0
+        sincronizado INTEGER NOT NULL DEFAULT 0,
+        eliminado INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
