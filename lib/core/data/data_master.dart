@@ -454,27 +454,36 @@ class DataMaster {
     if (producto == null) return;
 
     // Stock global — suma la cantidad recibida al total
-    final nuevoStockTotal =
-        ((producto['stockActual'] as num?)?.toInt() ?? 0) + cantidad;
+    final nuevoStockTotal = stockDisponible - cantidadEntregada;
 
-    // Destinos son permisos — agregar los nuevos sin duplicar
-    final destinosActuales = List<String>.from(producto['destinos'] ?? []);
-    for (final d in destinos) {
-      if (!destinosActuales.contains(d)) destinosActuales.add(d);
-    }
+    // Descontar del cupo del destino en stockPorDestino
+    final stockPorDestino =
+        Map<String, dynamic>.from(producto['stockPorDestino'] ?? {});
+    final stockDestinoActual =
+        (stockPorDestino[destinoId] as num?)?.toInt() ?? 0;
+    stockPorDestino[destinoId] =
+        (stockDestinoActual - cantidadEntregada).clamp(0, double.maxFinite).toInt();
 
     await database.transaction((txn) async {
-      await txn.insert('recepciones', {
+      await txn.insert('retiros', {
         'id': id,
         'productoId': productoId,
         'productoNombre': productoNombre,
         'tipo': tipo,
         'idioma': idioma,
-        'cantidad': cantidad,
-        'codigo': codigo,
-        'destinoClave': destinoClave,
-        'destinos': jsonEncode(destinos),
+        'companero': companero,
+        'lote': lote,
+        'destino': destino,
+        'destinoId': destinoId,
+        'cantidadEstimada': cantidadEstimada,
+        'cantidadEntregada': cantidadEntregada,
+        'cantidadDevuelta': 0,
+        'consumoReal': hayPendiente ? null : cantidadEntregada,
+        'perdida': hayPendiente ? null : 0,
+        'motivoCierre': hayPendiente ? null : 'Entrega exacta o menor',
+        'estado': hayPendiente ? 'pendiente' : 'cerrado',
         'fecha': fecha,
+        'fechaCierre': hayPendiente ? null : fecha,
         'sincronizado': 0,
       });
 
@@ -482,7 +491,7 @@ class DataMaster {
         'productos',
         {
           'stockActual': nuevoStockTotal,
-          'destinos': jsonEncode(destinosActuales),
+          'stockPorDestino': jsonEncode(stockPorDestino),
           'sincronizado': 0,
         },
         where: 'id = ?',
@@ -625,6 +634,7 @@ class DataMaster {
         'productos',
         {
           'stockActual': nuevoStockTotal,
+          'stockPorDestino': jsonEncode(stockPorDestino),
           'sincronizado': 0,
         },
         where: 'id = ?',
@@ -683,9 +693,21 @@ class DataMaster {
     final producto = await obtenerProductoPorId(productoId);
     if (producto == null) return;
 
-    // El stock es global — simplemente sumamos la devolución al total
-    final stockActual = (producto['stockActual'] as num?)?.toInt() ?? 0;
+  final stockActual = (producto['stockActual'] as num?)?.toInt() ?? 0;
     final nuevoStockTotal = stockActual + cantidadDevuelta;
+
+final stockPorDestino =
+        Map<String, dynamic>.from(producto['stockPorDestino'] ?? {});
+    final stockDestinoActual =
+        (stockPorDestino[destinoId] as num?)?.toInt() ?? 0;
+    stockPorDestino[destinoId] = stockDestinoActual + cantidadDevuelta;
+	
+    // Devolver al cupo del destino en stockPorDestino
+    final stockPorDestino =
+        Map<String, dynamic>.from(producto['stockPorDestino'] ?? {});
+    final stockDestinoActual =
+        (stockPorDestino[destinoId] as num?)?.toInt() ?? 0;
+    stockPorDestino[destinoId] = stockDestinoActual + cantidadDevuelta;
 
     final retiroRows = await database.query(
       'retiros',
@@ -697,6 +719,14 @@ class DataMaster {
     final entregada = (retiro['cantidadEntregada'] as num).toInt();
     final consumoReal = entregada - cantidadDevuelta;
 
+
+final stockPorDestino =
+        Map<String, dynamic>.from(producto['stockPorDestino'] ?? {});
+    final stockDestinoActual =
+        (stockPorDestino[destinoId] as num?)?.toInt() ?? 0;
+    stockPorDestino[destinoId] =
+        (stockDestinoActual - cantidadEntregada).clamp(0, double.maxFinite).toInt();
+		
     await database.transaction((txn) async {
       await txn.update(
         'retiros',
@@ -717,6 +747,7 @@ class DataMaster {
         'productos',
         {
           'stockActual': nuevoStockTotal,
+          'stockPorDestino': jsonEncode(stockPorDestino),
           'sincronizado': 0,
         },
         where: 'id = ?',
