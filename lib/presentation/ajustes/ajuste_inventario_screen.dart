@@ -59,13 +59,20 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
   }
 
   Future<void> _cargarNombresDestinos() async {
-    final destinos = await DataMaster().obtenerDestinos();
-    setState(() {
-      _nombresDestinos = {
-        for (final d in destinos)
-          d['id'].toString(): d['nombre'].toString(),
-      };
-    });
+    try {
+      final destinos = await DataMaster().obtenerDestinos();
+      if (destinos != null && mounted) {
+        setState(() {
+          _nombresDestinos = {
+            for (final d in destinos)
+              if (d['id'] != null)
+                d['id'].toString(): (d['nombre'] ?? '').toString(),
+          };
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargando destinos: $e');
+    }
   }
 
   Future<void> _seleccionarProducto(Map<String, dynamic> producto) async {
@@ -323,7 +330,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.3),
+                    color: AppColors.primary.withOpacity(0.3),
                   ),
                 ),
                 child: Row(
@@ -561,7 +568,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
+                color: Colors.orange.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.orange),
               ),
@@ -599,7 +606,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
                       border: Border.all(
                         color: seleccionado
                             ? AppColors.primary
-                            : AppColors.primary.withValues(alpha: 0.3),
+                            : AppColors.primary.withOpacity(0.3),
                         width: seleccionado ? 2 : 1,
                       ),
                     ),
@@ -740,7 +747,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
+                color: Colors.red.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.red),
               ),
@@ -803,7 +810,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: (color ?? AppColors.primary).withValues(alpha: 0.1),
+        color: (color ?? AppColors.primary).withOpacity(0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -821,7 +828,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.2),
+        color: Colors.white.withOpacity(0.2),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
