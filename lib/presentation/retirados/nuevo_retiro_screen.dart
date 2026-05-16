@@ -196,6 +196,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         destinoId: destinoId,
         cantidadEstimada: cantidadEstimada,
         cantidadEntregada: cantidadEntregada,
+        codigoRecepcion: codigoRecepcion,
       );
 
       if (!ok) {
