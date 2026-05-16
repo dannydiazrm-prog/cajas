@@ -541,8 +541,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                               ),
                             ),
                             const SizedBox(height: 2),
-                            Text(
-                             Text(
+                            Text(                        
                               'Cód. $prefijo · Disponibles: $stockDisponible',
                               style: TextStyle(
                                 color: seleccionado
