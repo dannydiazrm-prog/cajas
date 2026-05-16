@@ -586,8 +586,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
               children: _combinaciones.map((combinacion) {
                 final ids =
                     List<String>.from(combinacion['destinosIds'] as List);
-                final clave = combinacion['clave'] as String;
-                final cantidad = combinacion['cantidad'] as int;
+                final clave = combinacion['clave'] as String;        
                 final seleccionado =
                     _combinacionSeleccionada?['clave'] == clave;
 
