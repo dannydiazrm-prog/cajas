@@ -1081,13 +1081,75 @@ class DataMaster {
           whereArgs: [idLocal],
         );
 
-        // FIX: propagar el ID real a retiros que usaban este destinoId local
+        // Propagar idReal a retiros que usaban este destinoId local
         await database.update(
           'retiros',
           {'destinoId': idReal, 'sincronizado': 0},
           where: 'destinoId = ?',
           whereArgs: [idLocal],
         );
+
+        // Propagar idReal dentro de recepciones.destinos (array JSON)
+        // y recepciones.destinoClave
+        final todasRecepciones = await database.query('recepciones');
+        for (final rec in todasRecepciones) {
+          final destinosJson = rec['destinos'] as String? ?? '[]';
+          final destinosList = List<String>.from(jsonDecode(destinosJson));
+          final contieneLocal = destinosList.contains(idLocal);
+          final claveEsLocal = (rec['destinoClave'] as String?) == idLocal;
+
+          if (contieneLocal || claveEsLocal) {
+            final destinosActualizado = destinosList
+                .map((d) => d == idLocal ? idReal : d)
+                .toList();
+            await database.update(
+              'recepciones',
+              {
+                'destinos': jsonEncode(destinosActualizado),
+                if (claveEsLocal) 'destinoClave': idReal,
+                'sincronizado': 0,
+              },
+              where: 'id = ?',
+              whereArgs: [rec['id']],
+            );
+          }
+        }
+
+        // Propagar idReal dentro de productos.destinos (array JSON)
+        // y productos.stockPorDestino (mapa JSON con idLocal como clave)
+        final todosProductos = await database.query('productos');
+        for (final prod in todosProductos) {
+          final destinosJson = prod['destinos'] as String? ?? '[]';
+          final stockJson = prod['stockPorDestino'] as String? ?? '{}';
+          final destinosList = List<String>.from(jsonDecode(destinosJson));
+          final stockMap = Map<String, dynamic>.from(jsonDecode(stockJson));
+
+          final contieneLocal = destinosList.contains(idLocal);
+          final stockTieneLocal = stockMap.containsKey(idLocal);
+
+          if (contieneLocal || stockTieneLocal) {
+            final destinosActualizado = destinosList
+                .map((d) => d == idLocal ? idReal : d)
+                .toList();
+
+            final stockActualizado = <String, dynamic>{};
+            for (final entry in stockMap.entries) {
+              stockActualizado[entry.key == idLocal ? idReal : entry.key] =
+                  entry.value;
+            }
+
+            await database.update(
+              'productos',
+              {
+                'destinos': jsonEncode(destinosActualizado),
+                'stockPorDestino': jsonEncode(stockActualizado),
+                'sincronizado': 0,
+              },
+              where: 'id = ?',
+              whereArgs: [prod['id']],
+            );
+          }
+        }
       } else {
         await FirebaseFirestore.instance
             .collection('destinos')
