@@ -36,9 +36,7 @@ void main() async {
   }
 
   runApp(
-    kIsWeb
-        ? const WebNotSupportedApp()
-        : const ProviderScope(child: GalmedicApp()),
+    const ProviderScope(child: GalmedicApp()),
   );
 }
 
@@ -52,50 +50,6 @@ class GalmedicApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme,
       routerConfig: appRouter,
-    );
-  }
-}
-
-class WebNotSupportedApp extends StatelessWidget {
-  const WebNotSupportedApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: const Color(0xFF1A1A2E),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.phone_android,
-                size: 80,
-                color: Colors.white54,
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Galmedic',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Esta aplicación está disponible\nsolo en dispositivo móvil.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
