@@ -1861,18 +1861,25 @@ class DataMaster {
   // ─────────────────────────────────────────
 
   Future<String> obtenerPin() async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('config')
-          .doc('pin')
-          .get();
-      if (snap.exists) {
-        return snap.data()?['valor']?.toString() ?? '1234';
-      }
-    } catch (e) {
-      final pinLocal = await leerConfig('pin');
-      if (pinLocal != null) return pinLocal;
-    }
-    return '1234';
+  if (kIsWeb) {
+    final snap = await FirebaseFirestore.instance
+        .collection('config')
+        .doc('pin')
+        .get();
+    return snap.data()?['valor']?.toString() ?? '1234';
   }
+  try {
+    final snap = await FirebaseFirestore.instance
+        .collection('config')
+        .doc('pin')
+        .get();
+    if (snap.exists) {
+      return snap.data()?['valor']?.toString() ?? '1234';
+    }
+  } catch (e) {
+    final pinLocal = await leerConfig('pin');
+    if (pinLocal != null) return pinLocal;
+  }
+  return '1234';
+}
 }
