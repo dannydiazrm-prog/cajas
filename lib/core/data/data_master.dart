@@ -169,6 +169,29 @@ class DataMaster {
         await FirebaseFirestore.instance.collection('productos').get();
     final database = await db;
 
+    // IDs que existen en Firestore
+    final idsFirestore = snapshot.docs.map((d) => d.id).toSet();
+
+    // Borrar de SQLite los productos con ID real que ya no existen en Firestore
+    final locales = await database.query(
+      'productos',
+      where: 'sincronizado = 1 AND eliminado = 0',
+    );
+    for (final local in locales) {
+      final idLocal = local['id'] as String;
+      if (!idLocal.startsWith('local_') && !idsFirestore.contains(idLocal)) {
+        // Ya no existe en Firestore — borrar localmente en cascada
+        await database.delete('recepciones',
+            where: 'productoId = ?', whereArgs: [idLocal]);
+        await database.delete('retiros',
+            where: 'productoId = ?', whereArgs: [idLocal]);
+        await database.delete('ajustes',
+            where: 'productoId = ?', whereArgs: [idLocal]);
+        await database.delete('productos',
+            where: 'id = ?', whereArgs: [idLocal]);
+      }
+    }
+
     for (final doc in snapshot.docs) {
       final local = await database.query(
         'productos',
@@ -206,6 +229,23 @@ class DataMaster {
     final snapshot =
         await FirebaseFirestore.instance.collection('destinos').get();
     final database = await db;
+
+    // IDs que existen en Firestore
+    final idsFirestore = snapshot.docs.map((d) => d.id).toSet();
+
+    // Borrar de SQLite los destinos con ID real que ya no existen en Firestore
+    final locales = await database.query(
+      'destinos',
+      where: 'sincronizado = 1',
+    );
+    for (final local in locales) {
+      final idLocal = local['id'] as String;
+      if (!idLocal.startsWith('local_') && !idsFirestore.contains(idLocal)) {
+        await database.delete('destinos',
+            where: 'id = ?', whereArgs: [idLocal]);
+      }
+    }
+
     final batch = database.batch();
     for (final doc in snapshot.docs) {
       final data = doc.data();
