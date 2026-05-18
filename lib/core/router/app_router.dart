@@ -5,6 +5,7 @@ import '../../presentation/perfil/gestion_datos_screen.dart';
 import '../../presentation/perfil/gestion_recepciones_screen.dart';
 import '../../presentation/perfil/gestion_ajustes_screen.dart';
 import '../../presentation/perfil/eliminar_producto_screen.dart';
+import '../../presentation/perfil/carga_inicial_screen.dart';
 import '../../presentation/dashboard/dashboard_screen.dart';
 import '../../presentation/retirados/retirados_screen.dart';
 import '../../presentation/retirados/nuevo_retiro_screen.dart';
@@ -25,7 +26,6 @@ import '../../presentation/inventario/toma_inventario_screen.dart';
 import '../../presentation/inventario/ver_productos_screen.dart';
 import '../../presentation/inventario/reportes_screen.dart';
 import '../../presentation/inventario/control_stock_screen.dart';
-import '../../presentation/perfil/carga_inicial_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/pin',
@@ -53,6 +53,10 @@ final appRouter = GoRouter(
             GoRoute(
               path: 'eliminar-producto',
               builder: (context, state) => const EliminarProductoScreen(),
+            ),
+            GoRoute(
+              path: 'carga-inicial',
+              builder: (context, state) => const CargaInicialScreen(),
             ),
           ],
         ),
@@ -128,10 +132,6 @@ final appRouter = GoRouter(
           path: 'nuevo-destino',
           builder: (context, state) => const NuevoDestinoScreen(),
         ),
-		GoRoute(
-  path: '/perfil/gestion/carga-inicial',
-  builder: (context, state) => const CargaInicialScreen(),
-),
         GoRoute(
           path: 'toma',
           builder: (context, state) => const TomaInventarioScreen(),
