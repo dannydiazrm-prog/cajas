@@ -663,13 +663,24 @@ class DataMaster {
         (combinaciones[clave]!['recepcionIds'] as List<String>)
             .add(row['id'] as String);
       } else {
-        combinaciones[clave] = {
-          'destinosIds': destinos,
-          'cantidadActual': cantidadActual,
-          'clave': clave,
-          'prefijo': prefijo,
-          'recepcionIds': [row['id'] as String],
-        };
+        // Resolver nombres de destinos
+final todosDestinos = await database.query('destinos');
+final nombresDestinos = destinos.map((id) {
+  final encontrado = todosDestinos.firstWhere(
+    (d) => d['id'].toString() == id,
+    orElse: () => {'nombre': id},
+  );
+  return encontrado['nombre'].toString();
+}).toList();
+
+combinaciones[clave] = {
+  'destinosIds': destinos,
+  'destinosNombres': nombresDestinos.join(' · '),
+  'cantidadActual': cantidadActual,
+  'clave': clave,
+  'prefijo': prefijo,
+  'recepcionIds': [row['id'] as String],
+};
       }
     }
 

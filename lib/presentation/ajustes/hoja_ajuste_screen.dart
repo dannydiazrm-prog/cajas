@@ -326,7 +326,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     final seleccionado = _combinacionSeleccionada == c;
     final disponible = (c['cantidadActual'] as num?)?.toInt() ?? 0;
     final prefijo = c['prefijo']?.toString() ?? '';
-    final destinos = _formatDestinos(c['destinosIds']);
+    final destinos = c['destinosNombres']?.toString() ?? '';
 
     return GestureDetector(
       onTap: () => setState(() => _combinacionSeleccionada = c),
