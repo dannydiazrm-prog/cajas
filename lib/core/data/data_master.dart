@@ -1706,45 +1706,19 @@ class DataMaster {
 
   Future<void> registrarHojaAjuste({
     required String productoId,
-    required String retiroId,
+    required String companero,
     required int cantidad,
     required String motivo,
+    required List<String> recepcionIds,
   }) async {
     final database = await db;
     final producto = await obtenerProductoPorId(productoId);
     if (producto == null) throw Exception('Producto no encontrado');
 
     final stockAnterior = (producto['stockActual'] as num).toInt();
-
-    // Encontrar el retiro para obtener el código de recepción
-    final retiroRows = await database.query(
-      'retiros',
-      where: 'id = ?',
-      whereArgs: [retiroId],
-    );
-    final retiro = retiroRows.isNotEmpty
-        ? retiroRows.first
-        : <String, dynamic>{};
-    final codigoRecepcion = (retiro['codigoRecepcion'] ?? '').toString();
-
-    // Buscar recepciones del lote para descontar
-    final recepcionIds = <String>[];
-    if (codigoRecepcion.isNotEmpty) {
-      final receps = await database.query(
-        'recepciones',
-        where: "productoId = ? AND codigo LIKE ?",
-        whereArgs: [productoId, '$codigoRecepcion%'],
-        orderBy: 'fecha ASC',
-      );
-      for (final r in receps) {
-        recepcionIds.add(r['id'] as String);
-      }
-    }
-
     final id = 'local_${DateTime.now().millisecondsSinceEpoch}';
 
     await database.transaction((txn) async {
-      // Descontar de las recepciones del lote
       int restante = cantidad;
       for (final recepcionId in recepcionIds) {
         if (restante <= 0) break;
@@ -1773,13 +1747,13 @@ class DataMaster {
         'productoNombre': producto['nombre'],
         'tipoProducto': producto['tipo'],
         'idioma': producto['idioma'],
-        'retiroId': retiroId,
+        'retiroId': null,
         'recepcionId': recepcionIds.join(','),
-        'lote': retiro['lote'] ?? '',
-        'companero': retiro['companero'] ?? '',
+        'lote': '',
+        'companero': companero,
         'cantidad': cantidad,
         'stockAnterior': stockAnterior,
-        'stockNuevo': 0, // se actualiza abajo
+        'stockNuevo': 0,
         'motivo': motivo,
         'fecha': DateTime.now().toIso8601String(),
         'sincronizado': 0,
@@ -1798,6 +1772,7 @@ class DataMaster {
       whereArgs: [id],
     );
   }
+
 
   // ─────────────────────────────────────────
   // ELIMINAR PRODUCTO COMPLETO
