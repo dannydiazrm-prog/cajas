@@ -13,10 +13,10 @@ class NuevoDestinoScreen extends StatefulWidget {
 
 class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
   final _nombreController = TextEditingController();
+  final _busquedaController = TextEditingController();
   bool _loading = false;
   String _error = '';
   String _busqueda = '';
-  final _busquedaController = TextEditingController();
   List<Map<String, dynamic>> _destinos = [];
 
   @override
@@ -47,7 +47,6 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
       return;
     }
 
-    // Verificar que no exista ya un destino con el mismo nombre
     final yaExiste = _destinos.any(
       (d) => (d['nombre'] ?? '').toString().toLowerCase() ==
           nombre.toLowerCase(),
@@ -64,7 +63,6 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
 
     try {
       await DataMaster().crearDestino(nombre: nombre);
-
       if (mounted) {
         _nombreController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -82,15 +80,12 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _eliminar(String id, bool editable) async {
-    if (!editable) return;
-
+  Future<void> _eliminar(String id) async {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar destino'),
-        content: const Text(
-            '¿Estás seguro? Esta acción no se puede deshacer.'),
+        content: const Text('¿Estás seguro? Esta acción no se puede deshacer.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -98,46 +93,59 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Eliminar',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
 
-    if (confirmar == true) {
-      // Verificar si el destino tiene productos asociados
-      final db = await DataMaster().db;
-      final recepciones = await db.query(
-        'recepciones',
-        where: 'destinoId = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
+    if (confirmar != true) return;
 
-      if (recepciones.isNotEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'No se puede eliminar: el destino tiene productos asociados.',
-              ),
-              backgroundColor: Colors.red,
+    // Verificar productos asociados
+    final database = await DataMaster().db;
+    final recepciones = await database.query(
+      'recepciones',
+      where: 'destinoId = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+
+    if (!mounted) return;
+
+    if (recepciones.isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('No se puede eliminar'),
+          content: const Text(
+            'Este destino tiene productos asociados y no puede eliminarse.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido'),
             ),
-          );
-        }
-        return;
-      }
-
-      await DataMaster().eliminarDestino(id: id);
-      await _cargarDestinos();
+          ],
+        ),
+      );
+      return;
     }
+
+    await DataMaster().eliminarDestino(id: id);
+    await _cargarDestinos();
   }
 
   @override
   Widget build(BuildContext context) {
+    final destinosFiltrados = _busqueda.isEmpty
+        ? _destinos
+        : _destinos.where((d) {
+            return (d['nombre'] ?? '')
+                .toString()
+                .toLowerCase()
+                .contains(_busqueda.toLowerCase());
+          }).toList();
+
     return Scaffold(
       body: Column(
         children: [
@@ -151,6 +159,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── Crear nuevo destino ──
                       const Text(
                         'NUEVO DESTINO',
                         style: TextStyle(
@@ -219,6 +228,8 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
+
+                      // ── Lista de destinos ──
                       Row(
                         children: [
                           const Text(
@@ -247,17 +258,21 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                         onChanged: (v) => setState(() => _busqueda = v),
                         decoration: InputDecoration(
                           hintText: 'Buscar destino...',
-                          prefixIcon: const Icon(Icons.search, color: AppColors.primary, size: 20),
+                          prefixIcon: const Icon(Icons.search,
+                              color: AppColors.primary, size: 20),
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: AppColors.primary),
+                            borderSide:
+                                const BorderSide(color: AppColors.primary),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                            borderSide: const BorderSide(
+                                color: AppColors.primary, width: 2),
                           ),
                         ),
                       ),
@@ -268,21 +283,24 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                             padding: EdgeInsets.all(24),
                             child: Text(
                               'No hay destinos creados todavía',
-                              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
-                      ...(_destinos.where((d) {
-                        if (_busqueda.isEmpty) return true;
-                        return (d['nombre'] ?? '').toString().toLowerCase().contains(_busqueda.toLowerCase());
-                      }).map((d) {
-                        final editable = (d['editable'] == 1 || d['editable'] == true);
+                      ...destinosFiltrados.map((d) {
+                        final editable =
+                            (d['editable'] == 1 || d['editable'] == true);
+                        final id = d['id']?.toString() ?? '';
                         return _buildDestinoItem(
                           nombre: d['nombre']?.toString() ?? '',
                           editable: editable,
-                          onEliminar: editable ? () => _eliminar(d['id']?.toString() ?? '', editable) : null,
+                          onEliminar:
+                              editable ? () => _eliminar(id) : null,
                         );
-                      })),
+                      }),
                     ],
                   ),
                 ),
@@ -308,7 +326,8 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
       ),
       child: ListTile(
         dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
         leading: Container(
           width: 32,
           height: 32,
@@ -316,7 +335,8 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
             color: AppColors.primary.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.location_on_outlined, color: AppColors.primary, size: 18),
+          child: const Icon(Icons.location_on_outlined,
+              color: AppColors.primary, size: 18),
         ),
         title: Text(
           nombre,
@@ -328,12 +348,14 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
         ),
         trailing: editable && onEliminar != null
             ? IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                icon: const Icon(Icons.delete_outline,
+                    color: Colors.red, size: 20),
                 onPressed: onEliminar,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               )
-            : const Icon(Icons.lock_outline, color: AppColors.onSurfaceDim, size: 16),
+            : const Icon(Icons.lock_outline,
+                color: AppColors.onSurfaceDim, size: 16),
       ),
     );
   }
