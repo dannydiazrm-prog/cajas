@@ -52,11 +52,23 @@ class _Header extends StatelessWidget {
               ),
             ),
           ),
-          IconButton(
-            onPressed: () => context.push('/perfil'),
-            icon: const CircleAvatar(
-              backgroundColor: Colors.black,
-              child: Icon(Icons.person, color: Colors.white),
+          GestureDetector(
+            onTap: () => context.push('/perfil'),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  width: 1,
+                ),
+              ),
+              child: const Icon(
+                Icons.manage_accounts_outlined,
+                color: Colors.white,
+                size: 26,
+              ),
             ),
           ),
         ],

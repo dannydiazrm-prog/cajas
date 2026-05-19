@@ -13,9 +13,25 @@ class ControlStockScreen extends StatefulWidget {
   @override
   State<ControlStockScreen> createState() => _ControlStockScreenState();
 }
-
-class _ControlStockScreenState extends State<ControlStockScreen> {
+class _ControlStockScreenState extends State<ControlStockScreen>
+    with SingleTickerProviderStateMixin {
   bool _generando = false;
+  late TabController _tabController;
+  final Map<int, int> _paginas = {0: 0, 1: 0, 2: 0};
+  static const int _porPagina = 10;
+  
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   Color _colorSemaforo(int stock) {
     if (stock == 0) return Colors.red;
@@ -44,6 +60,150 @@ class _ControlStockScreenState extends State<ControlStockScreen> {
     });
 
     return bajos;
+  }
+
+  List<Map<String, dynamic>> _filtrarPorTab(
+      List<Map<String, dynamic>> docs, int tabIndex) {
+    return docs.where((p) {
+      final stock = (p['stockActual'] as num?)?.toInt() ?? 0;
+      if (tabIndex == 0) return stock == 0;
+      if (tabIndex == 1) return stock > 0 && stock <= 500;
+      return stock > 500 && stock < 1000;
+    }).toList();
+  }
+
+  Widget _buildListaPaginada(List<Map<String, dynamic>> items, int tabIndex) {
+    final pagina = _paginas[tabIndex] ?? 0;
+    final totalPaginas = (items.length / _porPagina).ceil();
+    final inicio = pagina * _porPagina;
+    final fin = (inicio + _porPagina).clamp(0, items.length);
+    final itemsPagina = items.sublist(inicio, fin);
+
+    if (items.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Text(
+            'Sin productos en esta categoría',
+            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: itemsPagina.length,
+            itemBuilder: (context, index) {
+              final data = itemsPagina[index];
+              final stock = (data['stockActual'] as num?)?.toInt() ?? 0;
+              final color = _colorSemaforo(stock);
+              final estado = _etiquetaSemaforo(stock);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: color, width: 2),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['nombre'] ?? '',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              _buildTag(data['tipo'] ?? ''),
+                              const SizedBox(width: 6),
+                              _buildTag(data['idioma'] ?? ''),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '$stock',
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 20,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            estado,
+                            style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        if (totalPaginas > 1)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  onPressed: pagina > 0
+                      ? () => setState(() => _paginas[tabIndex] = pagina - 1)
+                      : null,
+                  icon: const Icon(Icons.arrow_back_ios, size: 16),
+                  color: AppColors.primary,
+                ),
+                Text(
+                  '${pagina + 1} / $totalPaginas',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                IconButton(
+                  onPressed: pagina < totalPaginas - 1
+                      ? () => setState(() => _paginas[tabIndex] = pagina + 1)
+                      : null,
+                  icon: const Icon(Icons.arrow_forward_ios, size: 16),
+                  color: AppColors.primary,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 
   Future<void> _generarPDF(List<Map<String, dynamic>> docs) async {
@@ -190,8 +350,7 @@ class _ControlStockScreenState extends State<ControlStockScreen> {
 
     setState(() => _generando = false);
   }
-
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
@@ -203,9 +362,7 @@ class _ControlStockScreenState extends State<ControlStockScreen> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primary,
-                    ),
+                    child: CircularProgressIndicator(color: AppColors.primary),
                   );
                 }
 
@@ -242,143 +399,59 @@ class _ControlStockScreenState extends State<ControlStockScreen> {
                   );
                 }
 
+                final sinStock = _filtrarPorTab(docs, 0);
+                final critico = _filtrarPorTab(docs, 1);
+                final bajo = _filtrarPorTab(docs, 2);
+
                 return Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(
-                            child: Text(
-                              '${docs.length} producto${docs.length != 1 ? 's' : ''} con stock bajo',
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                              ),
+                          Text(
+                            '${docs.length} productos con stock bajo',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
                             ),
                           ),
                           ElevatedButton.icon(
-                            onPressed: _generando
-                                ? null
-                                : () => _generarPDF(docs),
-                            icon: const Icon(Icons.picture_as_pdf_outlined,
-                                size: 18),
+                            onPressed: _generando ? null : () => _generarPDF(docs),
+                            icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
                             label: _generando
                                 ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
+                                    width: 14, height: 14,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                   )
                                 : const Text('PDF'),
                           ),
                         ],
                       ),
                     ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          _Leyenda(color: Colors.red, label: 'Sin stock'),
-                          SizedBox(width: 16),
-                          _Leyenda(color: Colors.orange, label: 'Crítico'),
-                          SizedBox(width: 16),
-                          _Leyenda(color: Colors.amber, label: 'Bajo'),
-                        ],
-                      ),
-                    ),
                     const SizedBox(height: 8),
+                    TabBar(
+                      controller: _tabController,
+                      labelColor: AppColors.primary,
+                      unselectedLabelColor: AppColors.onSurfaceDim,
+                      indicatorColor: AppColors.primary,
+                      dividerColor: AppColors.border,
+                      tabs: [
+                        Tab(text: 'Sin stock (${sinStock.length})'),
+                        Tab(text: 'Crítico (${critico.length})'),
+                        Tab(text: 'Bajo (${bajo.length})'),
+                      ],
+                    ),
                     Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: docs.length,
-                        itemBuilder: (context, index) {
-                          final data = docs[index];
-                          final stock =
-                              (data['stockActual'] as num?)?.toInt() ?? 0;
-                          final color = _colorSemaforo(stock);
-                          final estado = _etiquetaSemaforo(stock);
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: color, width: 2),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        data['nombre'] ?? '',
-                                        style: const TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          _buildTag(data['tipo'] ?? ''),
-                                          const SizedBox(width: 8),
-                                          _buildTag(data['idioma'] ?? ''),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      '$stock',
-                                      style: TextStyle(
-                                        color: color,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 20,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: color.withOpacity(0.1),
-                                        borderRadius:
-                                            BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        estado,
-                                        style: TextStyle(
-                                          color: color,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildListaPaginada(sinStock, 0),
+                          _buildListaPaginada(critico, 1),
+                          _buildListaPaginada(bajo, 2),
+                        ],
                       ),
                     ),
                   ],

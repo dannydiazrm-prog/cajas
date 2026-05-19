@@ -274,6 +274,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                       children: [
                         Expanded(
                           child: TextField(
+                            style: const TextStyle(color: Color(0xFF0c6246)),
                             controller: _loteController,
                             textCapitalization: TextCapitalization.sentences,
                             decoration: InputDecoration(

@@ -15,6 +15,8 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
   final _nombreController = TextEditingController();
   bool _loading = false;
   String _error = '';
+  String _busqueda = '';
+  final _busquedaController = TextEditingController();
   List<Map<String, dynamic>> _destinos = [];
 
   @override
@@ -26,6 +28,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
   @override
   void dispose() {
     _nombreController.dispose();
+    _busquedaController.dispose();
     super.dispose();
   }
 
@@ -103,7 +106,31 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
         ],
       ),
     );
+
     if (confirmar == true) {
+      // Verificar si el destino tiene productos asociados
+      final db = await DataMaster().database;
+      final recepciones = await db.query(
+        'recepciones',
+        where: 'destinoId = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+
+      if (recepciones.isNotEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No se puede eliminar: el destino tiene productos asociados.',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
       await DataMaster().eliminarDestino(id: id);
       await _cargarDestinos();
     }
@@ -135,7 +162,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                       ),
                       const SizedBox(height: 12),
                       TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
+                        style: const TextStyle(color: Color(0xFF0c6246)),
                         controller: _nombreController,
                         textCapitalization: TextCapitalization.sentences,
                         decoration: InputDecoration(
@@ -192,40 +219,70 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
-                      const Text(
-                        'DESTINOS EXISTENTES',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
+                      Row(
+                        children: [
+                          const Text(
+                            'DESTINOS EXISTENTES',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '(${_destinos.length})',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        style: const TextStyle(color: Color(0xFF0c6246)),
+                        controller: _busquedaController,
+                        onChanged: (v) => setState(() => _busqueda = v),
+                        decoration: InputDecoration(
+                          hintText: 'Buscar destino...',
+                          prefixIcon: const Icon(Icons.search, color: AppColors.primary, size: 20),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.primary),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
                       if (_destinos.isEmpty)
                         const Center(
-                          child: Text(
-                            'No hay destinos creados todavía',
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Text(
+                              'No hay destinos creados todavía',
+                              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
                             ),
                           ),
                         ),
-                      ..._destinos.map((d) {
-                        final editable =
-                            (d['editable'] == 1 || d['editable'] == true);
+                      ...(_destinos.where((d) {
+                        if (_busqueda.isEmpty) return true;
+                        return (d['nombre'] ?? '').toString().toLowerCase().contains(_busqueda.toLowerCase());
+                      }).map((d) {
+                        final editable = (d['editable'] == 1 || d['editable'] == true);
                         return _buildDestinoItem(
                           nombre: d['nombre']?.toString() ?? '',
                           editable: editable,
-                          onEliminar: editable
-                              ? () => _eliminar(
-                                    d['id']?.toString() ?? '',
-                                    editable,
-                                  )
-                              : null,
+                          onEliminar: editable ? () => _eliminar(d['id']?.toString() ?? '', editable) : null,
                         );
-                      }),
+                      })),
                     ],
                   ),
                 ),
@@ -243,38 +300,40 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
     VoidCallback? onEliminar,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: AppColors.primary.withValues(alpha: 0.3)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
       ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.flag_outlined,
-            color: AppColors.primary,
-            size: 20,
+      child: ListTile(
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        leading: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(8),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              nombre,
-              style: const TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-              ),
-            ),
+          child: const Icon(Icons.location_on_outlined, color: AppColors.primary, size: 18),
+        ),
+        title: Text(
+          nombre,
+          style: const TextStyle(
+            color: AppColors.onBackground,
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
           ),
-          if (editable && onEliminar != null)
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: onEliminar,
-            ),
-        ],
+        ),
+        trailing: editable && onEliminar != null
+            ? IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                onPressed: onEliminar,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              )
+            : const Icon(Icons.lock_outline, color: AppColors.onSurfaceDim, size: 16),
       ),
     );
   }

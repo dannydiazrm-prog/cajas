@@ -411,63 +411,91 @@ class _HistorialRecepcionesScreenState
                             ),
                           ),
                         ),
-                      ..._resultados.map((data) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.primary.withOpacity(0.3),
+                     ..._resultados.map((data) {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Container(
+              width: 5,
+              color: AppColors.primary,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['productoNombre'] ?? '',
+                            style: const TextStyle(
+                              color: AppColors.onBackground,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
                             ),
                           ),
-                          child: Row(
+                          const SizedBox(height: 6),
+                          Row(
                             children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      data['productoNombre'] ?? '',
-                                      style: const TextStyle(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        _buildTag(data['tipo'] ?? ''),
-                                        const SizedBox(width: 8),
-                                        _buildTag(data['idioma'] ?? ''),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _formatFechaRaw(data['fecha']),
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              _buildTag(data['tipo'] ?? ''),
+                              const SizedBox(width: 6),
+                              _buildTag(data['idioma'] ?? ''),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.access_time_rounded,
+                                  size: 12, color: AppColors.onSurfaceDim),
+                              const SizedBox(width: 4),
                               Text(
-                                '+${data['cantidad'] ?? 0}',
+                                _formatFechaRaw(data['fecha']),
                                 style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 22,
+                                  color: AppColors.onSurfaceDim,
+                                  fontSize: 11,
                                 ),
                               ),
                             ],
                           ),
-                        );
-                      }),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '+${data['cantidad'] ?? 0}',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}),
                     ],
                   ],
                 ),

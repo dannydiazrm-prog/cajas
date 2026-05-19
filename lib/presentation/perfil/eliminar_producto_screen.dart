@@ -227,6 +227,7 @@ class _EliminarProductoScreenState
                       children: [
                         Expanded(
                           child: TextField(
+                            style: const TextStyle(color: Color(0xFF0c6246)),
                             controller: _nombreController,
                             decoration: InputDecoration(
                               hintText: 'Buscar producto por nombre',
