@@ -109,7 +109,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
 
     if (confirmar == true) {
       // Verificar si el destino tiene productos asociados
-      final db = await DataMaster().database;
+      final db = await DataMaster().db;
       final recepciones = await db.query(
         'recepciones',
         where: 'destinoId = ?',
