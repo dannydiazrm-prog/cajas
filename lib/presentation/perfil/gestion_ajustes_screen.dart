@@ -253,6 +253,7 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
             ),
             const SizedBox(height: 8),
             TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
               controller: cantidadCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
@@ -395,6 +396,7 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
                       controller: _nombreController,
                       decoration: InputDecoration(
                         hintText: 'Buscar por nombre de producto...',

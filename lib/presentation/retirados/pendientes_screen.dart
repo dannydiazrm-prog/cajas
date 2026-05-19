@@ -90,6 +90,7 @@ class _PendientesScreenState extends State<PendientesScreen> {
               ),
               const SizedBox(height: 8),
               TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
                 controller: cantidadCtrl,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(

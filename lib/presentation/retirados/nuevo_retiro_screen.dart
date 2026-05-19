@@ -256,6 +256,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         ),
         const SizedBox(height: 16),
         TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
           controller: _nombreController,
           decoration: InputDecoration(
             hintText: 'Buscar por nombre',
@@ -675,6 +676,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     ValueChanged<String>? onChanged,
   }) {
     return TextField(
+      style: const TextStyle(color: Color(0xFF0c6246)),
       controller: controller,
       keyboardType: teclado,
       textCapitalization: capitalization,

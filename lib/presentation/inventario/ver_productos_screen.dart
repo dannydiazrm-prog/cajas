@@ -246,6 +246,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                         color: AppColors.primary)),
                 const SizedBox(height: 8),
                 TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
                   controller: nombreCtrl,
                   decoration: InputDecoration(
                     filled: true,

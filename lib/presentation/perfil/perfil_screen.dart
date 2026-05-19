@@ -147,6 +147,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
             ),
             const SizedBox(height: 16),
             TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
               keyboardType: TextInputType.number,
               maxLength: 4,
               obscureText: true,
@@ -469,6 +470,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
     required VoidCallback onToggle,
   }) {
     return TextField(
+      style: const TextStyle(color: Color(0xFF0c6246)),
       controller: controller,
       obscureText: ocultar,
       keyboardType: TextInputType.number,

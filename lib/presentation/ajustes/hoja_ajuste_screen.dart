@@ -394,6 +394,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         ),
         const SizedBox(height: 8),
         TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
           controller: _companeroController,
           textCapitalization: TextCapitalization.words,
           decoration: _inputDecoration('Nombre del compañero'),
@@ -410,6 +411,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         ),
         const SizedBox(height: 8),
         TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
           controller: _cantidadController,
           keyboardType: TextInputType.number,
           decoration: _inputDecoration('Ej: 500'),
@@ -533,6 +535,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         ),
         const SizedBox(height: 12),
         TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
           controller: _nombreController,
           decoration: InputDecoration(
             hintText: 'Buscar por nombre',

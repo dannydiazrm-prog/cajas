@@ -356,6 +356,7 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
                     controller: _cantidadController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
@@ -386,6 +387,7 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
                     controller: _codigoController,
                     keyboardType: TextInputType.number,
                     maxLength: 5,
@@ -523,6 +525,7 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
         ),
         const SizedBox(height: 12),
         TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
           controller: _nombreController,
           decoration: InputDecoration(
             hintText: 'Buscar por nombre',

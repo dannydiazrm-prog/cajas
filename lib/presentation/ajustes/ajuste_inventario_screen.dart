@@ -253,6 +253,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
         ),
         const SizedBox(height: 16),
         TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
           controller: _nombreController,
           decoration: InputDecoration(
             hintText: 'Buscar por nombre',
@@ -661,6 +662,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
           ),
           const SizedBox(height: 8),
           TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
             controller: _cantidadController,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
@@ -721,6 +723,7 @@ class _AjusteInventarioScreenState extends State<AjusteInventarioScreen> {
           if (_motivo == 'Otro') ...[
             const SizedBox(height: 12),
             TextField(
+        style: const TextStyle(color: Color(0xFF0c6246)),
               controller: _otroController,
               decoration: InputDecoration(
                 hintText: 'Describí el motivo...',
