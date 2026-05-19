@@ -49,17 +49,17 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.background,
 
       // ── Color scheme ──────────────────────────────────────────────────────
-      colorScheme: const ColorScheme.dark(
-        primary:          AppColors.primary,
-        onPrimary:        AppColors.onPrimary,
-        secondary:        AppColors.primaryLight,
-        onSecondary:      AppColors.onPrimary,
-        surface:          AppColors.surface,
-        onSurface:        AppColors.onBackground,
-        error:            AppColors.error,
-        onError:          Colors.white,
-        outline:          AppColors.border,
-        surfaceContainerHighest: AppColors.surfaceAlt,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor:    AppColors.primary,
+        brightness:   Brightness.light,
+        primary:      AppColors.primary,
+        onPrimary:    AppColors.onPrimary,
+        secondary:    AppColors.primaryLight,
+        onSecondary:  AppColors.onPrimary,
+        surface:      AppColors.surface,
+        onSurface:    AppColors.primary,   // texto en inputs: verde oscuro legible
+        error:        AppColors.error,
+        onError:      Colors.white,
       ),
 
       // ── Tipografía ────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ class AppTheme {
       // ── TextField / Input ─────────────────────────────────────────────────
       inputDecorationTheme: InputDecorationTheme(
         filled:    true,
-        fillColor: AppColors.surface,
+        fillColor: AppColors.surface,  // #112d1f — verde muy oscuro
         hintStyle: GoogleFonts.inter(
           color:    AppColors.onSurfaceDim,
           fontSize: 14,
