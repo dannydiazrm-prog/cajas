@@ -36,9 +36,19 @@ dev_dependencies:
   build_runner: ^2.4.11
   drift_dev: ^2.18.0
   riverpod_generator: ^2.4.3
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/images/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/logo_galmedic.webp"
+  windows:
+    generate: true
+    image_path: "assets/images/logo_galmedic.webp"
+    icon_size: 48
