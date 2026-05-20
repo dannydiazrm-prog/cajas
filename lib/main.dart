@@ -50,25 +50,32 @@ class GalmedicApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme,
       routerConfig: appRouter,
-
-      // ── Builder global — sobreescribe fillColor y color de texto
-      //    en TODOS los TextField de la app sin tocar ninguna pantalla
       builder: (context, child) {
         final theme = Theme.of(context);
         return Theme(
           data: theme.copyWith(
             inputDecorationTheme: theme.inputDecorationTheme.copyWith(
-              // Fuerza fondo oscuro aunque la pantalla diga Colors.white
               fillColor: AppColors.surface,
             ),
           ),
-          // DefaultTextStyle fuerza el color del texto escrito
-          // dentro de cualquier TextField que herede del contexto
           child: DefaultTextStyle(
             style: theme.textTheme.bodyLarge!.copyWith(
               color: AppColors.onBackground,
             ),
-            child: child!,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: 0.07,
+                    child: Image.asset(
+                      'assets/images/fondo_animales.webp',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                child!,
+              ],
+            ),
           ),
         );
       },
