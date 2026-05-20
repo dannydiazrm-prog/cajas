@@ -66,7 +66,7 @@ class GalmedicApp extends StatelessWidget {
               children: [
                 Positioned.fill(
                   child: Opacity(
-                    opacity: 0.07,
+                    opacity: 0.15,
                     child: Image.asset(
                       'assets/images/fondo_animales.webp',
                       fit: BoxFit.cover,
