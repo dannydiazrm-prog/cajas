@@ -46,7 +46,7 @@ class AppTheme {
       useMaterial3: true,
 
       // ── Scaffold ──────────────────────────────────────────────────────────
-      scaffoldBackgroundColor: AppColors.background,
+      scaffoldBackgroundColor: Colors.transparent,
 
       // ── Color scheme ──────────────────────────────────────────────────────
       colorScheme: ColorScheme.fromSeed(
