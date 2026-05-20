@@ -51,6 +51,10 @@ class GalmedicApp extends StatelessWidget {
       theme: AppTheme.theme,
       routerConfig: appRouter,
       builder: (context, child) {
+        precacheImage(
+          const AssetImage('assets/images/fondo_animales.webp'),
+          context,
+        );
         final theme = Theme.of(context);
         return Theme(
           data: theme.copyWith(
@@ -65,8 +69,11 @@ class GalmedicApp extends StatelessWidget {
             child: Stack(
               children: [
                 Positioned.fill(
+                  child: ColoredBox(color: AppColors.background),
+                ),
+                Positioned.fill(
                   child: Opacity(
-                    opacity: 0.80,
+                    opacity: 0.15,
                     child: Image.asset(
                       'assets/images/fondo_animales.webp',
                       fit: BoxFit.cover,
