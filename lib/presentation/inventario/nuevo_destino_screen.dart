@@ -101,40 +101,50 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
 
     if (confirmar != true) return;
 
-    // Verificar productos asociados
-    final database = await DataMaster().db;
-    final recepciones = await database.query(
-      'recepciones',
-      where: 'destinoId = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
+    try {
+      final dm = DataMaster();
+      final database = await dm.db;
+      final recepciones = await database.query(
+        'recepciones',
+        where: 'destinoId = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (recepciones.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('No se puede eliminar'),
-          content: const Text(
-            'Este destino tiene productos asociados y no puede eliminarse.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Entendido'),
+      if (recepciones.isNotEmpty) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('No se puede eliminar'),
+            content: const Text(
+              'Este destino tiene productos asociados y no puede eliminarse.',
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      await dm.eliminarDestino(id: id);
+      if (mounted) await _cargarDestinos();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al eliminar: $e'),
+          backgroundColor: Colors.red,
         ),
       );
-      return;
     }
-
-    await DataMaster().eliminarDestino(id: id);
-    await _cargarDestinos();
-  }
-
+	}
+	
   @override
   Widget build(BuildContext context) {
     final destinosFiltrados = _busqueda.isEmpty
