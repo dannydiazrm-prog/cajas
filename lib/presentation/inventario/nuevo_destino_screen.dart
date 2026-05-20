@@ -300,7 +300,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
                             ),
                           ),
                         ),
-                      ...destinosFiltrados.map((d) {
+                   ...(_busqueda.isEmpty ? [] : destinosFiltrados).map((d) {
                         final editable =
                             (d['editable'] == 1 || d['editable'] == true);
                         final id = d['id']?.toString() ?? '';
