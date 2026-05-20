@@ -106,7 +106,7 @@ class _NuevoDestinoScreenState extends State<NuevoDestinoScreen> {
       final database = await dm.db;
       final recepciones = await database.query(
         'recepciones',
-        where: 'destinoId = ?',
+        where: 'destinoClave = ?',
         whereArgs: [id],
         limit: 1,
       );
