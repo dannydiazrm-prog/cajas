@@ -131,13 +131,8 @@ class _ControlStockScreenState extends State<ControlStockScreen>
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              _buildTag(data['tipo'] ?? ''),
-                              const SizedBox(width: 6),
-                              _buildTag(data['idioma'] ?? ''),
-                            ],
-                          ),
+                          if ((data['codigo'] ?? '').toString().isNotEmpty)
+                            _buildTag('Cód: ${data['codigo']}'),
                         ],
                       ),
                     ),
@@ -228,7 +223,7 @@ class _ControlStockScreenState extends State<ControlStockScreen>
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'DEPÓSITO DE ETIQUETAS - GALMEDIC',
+                    'DEPÓSITO DE CAJAS - GALMEDIC',
                     style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
@@ -262,9 +257,8 @@ class _ControlStockScreenState extends State<ControlStockScreen>
               columnWidths: {
                 0: const pw.FlexColumnWidth(3),
                 1: const pw.FlexColumnWidth(1.5),
-                2: const pw.FlexColumnWidth(1),
+                2: const pw.FlexColumnWidth(1.5),
                 3: const pw.FlexColumnWidth(1.5),
-                4: const pw.FlexColumnWidth(1.5),
               },
               children: [
                 pw.TableRow(
@@ -273,8 +267,7 @@ class _ControlStockScreenState extends State<ControlStockScreen>
                   ),
                   children: [
                     'NOMBRE',
-                    'TIPO',
-                    'IDIOMA',
+                    'CÓDIGO',
                     'STOCK ACTUAL',
                     'ESTADO',
                   ]
@@ -304,8 +297,7 @@ class _ControlStockScreenState extends State<ControlStockScreen>
                   return pw.TableRow(
                     children: [
                       data['nombre'] ?? '',
-                      data['tipo'] ?? '',
-                      data['idioma'] ?? '',
+                      data['codigo'] ?? '',
                       stock.toString(),
                       estado,
                     ]

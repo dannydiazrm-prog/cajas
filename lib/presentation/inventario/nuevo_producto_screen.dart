@@ -13,30 +13,27 @@ class NuevoProductoScreen extends StatefulWidget {
 
 class _NuevoProductoScreenState extends State<NuevoProductoScreen> {
   final _nombreController = TextEditingController();
-  String? _tipo;
-  String? _idioma;
+  final _codigoController = TextEditingController();
   bool _loading = false;
   String _error = '';
 
   @override
   void dispose() {
     _nombreController.dispose();
+    _codigoController.dispose();
     super.dispose();
   }
 
   Future<void> _guardar() async {
     final nombre = _nombreController.text.trim();
+    final codigo = _codigoController.text.trim();
 
     if (nombre.isEmpty) {
       setState(() => _error = 'Ingresa el nombre del producto');
       return;
     }
-    if (_tipo == null) {
-      setState(() => _error = 'Selecciona el tipo');
-      return;
-    }
-    if (_idioma == null) {
-      setState(() => _error = 'Selecciona el idioma');
+    if (codigo.isEmpty || codigo.length != 5 || int.tryParse(codigo) == null) {
+      setState(() => _error = 'Ingresa los 5 dígitos del código');
       return;
     }
 
@@ -48,8 +45,7 @@ class _NuevoProductoScreenState extends State<NuevoProductoScreen> {
     try {
       await DataMaster().crearProducto(
         nombre: nombre,
-        tipo: _tipo!,
-        idioma: _idioma!,
+        codigo: codigo,
       );
 
       if (mounted) {
@@ -84,34 +80,6 @@ class _NuevoProductoScreenState extends State<NuevoProductoScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'TIPO DE PRODUCTO',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          _buildSelector(
-                            label: 'ETIQUETA',
-                            icon: Icons.label_outline,
-                            seleccionado: _tipo == 'Etiqueta',
-                            onTap: () => setState(() => _tipo = 'Etiqueta'),
-                          ),
-                          const SizedBox(width: 16),
-                          _buildSelector(
-                            label: 'PROSPECTO',
-                            icon: Icons.description_outlined,
-                            seleccionado: _tipo == 'Prospecto',
-                            onTap: () => setState(() => _tipo = 'Prospecto'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      const Text(
                         'NOMBRE',
                         style: TextStyle(
                           color: AppColors.primary,
@@ -122,7 +90,7 @@ class _NuevoProductoScreenState extends State<NuevoProductoScreen> {
                       ),
                       const SizedBox(height: 12),
                       TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
+                        style: const TextStyle(color: Color(0xFF0c6246)),
                         controller: _nombreController,
                         textCapitalization: TextCapitalization.sentences,
                         decoration: InputDecoration(
@@ -143,7 +111,7 @@ class _NuevoProductoScreenState extends State<NuevoProductoScreen> {
                       ),
                       const SizedBox(height: 28),
                       const Text(
-                        'IDIOMA',
+                        'CÓDIGO (5 DÍGITOS)',
                         style: TextStyle(
                           color: AppColors.primary,
                           fontSize: 13,
@@ -152,22 +120,27 @@ class _NuevoProductoScreenState extends State<NuevoProductoScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          _buildSelector(
-                            label: 'ESPAÑOL',
-                            icon: Icons.language,
-                            seleccionado: _idioma == 'ES',
-                            onTap: () => setState(() => _idioma = 'ES'),
+                      TextField(
+                        style: const TextStyle(color: Color(0xFF0c6246)),
+                        controller: _codigoController,
+                        keyboardType: TextInputType.number,
+                        maxLength: 5,
+                        decoration: InputDecoration(
+                          hintText: 'Ej: 65123',
+                          counterText: '',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                const BorderSide(color: AppColors.primary),
                           ),
-                          const SizedBox(width: 16),
-                          _buildSelector(
-                            label: 'INGLÈS',
-                            icon: Icons.language,
-                            seleccionado: _idioma == 'EN',
-                            onTap: () => setState(() => _idioma = 'EN'),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                                color: AppColors.primary, width: 2),
                           ),
-                        ],
+                        ),
                       ),
                       const SizedBox(height: 32),
                       if (_error.isNotEmpty)
@@ -244,51 +217,6 @@ class _NuevoProductoScreenState extends State<NuevoProductoScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSelector({
-    required String label,
-    required IconData icon,
-    required bool seleccionado,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: 80,
-          decoration: BoxDecoration(
-            color: seleccionado ? AppColors.primary : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.primary,
-              width: seleccionado ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: seleccionado ? Colors.white : AppColors.primary,
-                size: 28,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: seleccionado ? Colors.white : AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  letterSpacing: 1,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

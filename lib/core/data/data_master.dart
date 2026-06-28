@@ -29,7 +29,7 @@ class DataMaster {
     final path = join(dir.path, 'galmedic.db');
     return openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _crearTablas,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -52,6 +52,10 @@ class DataMaster {
           await db.execute(
               "ALTER TABLE recepciones ADD COLUMN esCargaInicial INTEGER NOT NULL DEFAULT 0");
         }
+        if (oldVersion < 6) {
+          await db.execute(
+              "ALTER TABLE productos ADD COLUMN codigo TEXT NOT NULL DEFAULT ''");
+        }
       },
     );
   }
@@ -63,6 +67,7 @@ class DataMaster {
         nombre TEXT NOT NULL,
         tipo TEXT NOT NULL,
         idioma TEXT NOT NULL,
+        codigo TEXT NOT NULL DEFAULT '',
         stockActual INTEGER NOT NULL DEFAULT 0,
         stockPorDestino TEXT NOT NULL DEFAULT '{}',
         destinos TEXT NOT NULL DEFAULT '[]',
@@ -218,6 +223,7 @@ class DataMaster {
           'nombre': data['nombre'] ?? '',
           'tipo': data['tipo'] ?? '',
           'idioma': data['idioma'] ?? '',
+          'codigo': data['codigo'] ?? '',
           'stockActual': data['stockActual'] ?? 0,
           'stockPorDestino': jsonEncode(data['stockPorDestino'] ?? {}),
           'destinos': jsonEncode(data['destinos'] ?? []),
@@ -428,8 +434,9 @@ class DataMaster {
 
   Future<String> crearProducto({
     required String nombre,
-    required String tipo,
-    required String idioma,
+    required String codigo,
+    String tipo = 'Caja',
+    String idioma = '',
   }) async {
     final database = await db;
     final id = 'local_${DateTime.now().millisecondsSinceEpoch}';
@@ -438,6 +445,7 @@ class DataMaster {
       'nombre': nombre,
       'tipo': tipo,
       'idioma': idioma,
+      'codigo': codigo,
       'stockActual': 0,
       'stockPorDestino': '{}',
       'destinos': '[]',
@@ -451,8 +459,9 @@ class DataMaster {
   Future<void> actualizarProducto({
     required String id,
     required String nombre,
-    required String tipo,
-    required String idioma,
+    String tipo = 'Caja',
+    String idioma = '',
+    String codigo = '',
   }) async {
     final database = await db;
     await database.update(
@@ -461,6 +470,7 @@ class DataMaster {
         'nombre': nombre,
         'tipo': tipo,
         'idioma': idioma,
+        'codigo': codigo,
         'sincronizado': 0,
       },
       where: 'id = ?',

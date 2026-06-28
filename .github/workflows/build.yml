@@ -1,11 +1,11 @@
-name: Build APK and Web
+name: Build APK
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  build-android-web:
+  build-android:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,45 +29,8 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Build Web
-        run: flutter build web --release --base-href /etiquetas/
-
-      - name: Create .nojekyll
-        run: touch build/web/.nojekyll
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Deploy Web to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          branch: gh-pages
-          folder: build/web
-
-  build-windows:
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Generate launcher icons
-        run: dart run flutter_launcher_icons
-
-      - name: Build Windows
-        run: flutter build windows --release
-
-      - name: Upload EXE
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-release
-          path: build/windows/x64/runner/Release/

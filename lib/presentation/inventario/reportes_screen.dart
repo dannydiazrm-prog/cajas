@@ -17,10 +17,6 @@ class ReportesScreen extends StatefulWidget {
 class _ReportesScreenState extends State<ReportesScreen> {
   bool _conStock = false;
   bool _sinStock = false;
-  bool _prospectos = false;
-  bool _etiquetas = false;
-  bool _ingles = false;
-  bool _espanol = false;
   Set<String> _prefijosSeleccionados = {};
   List<String> _prefijosUsados = [];
   bool _cargandoPrefijos = true;
@@ -54,18 +50,6 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
     try {
       List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
-
-      if (_etiquetas && !_prospectos) {
-        docs = docs.where((d) => d['tipo'] == 'Etiqueta').toList();
-      } else if (_prospectos && !_etiquetas) {
-        docs = docs.where((d) => d['tipo'] == 'Prospecto').toList();
-      }
-
-      if (_espanol && !_ingles) {
-        docs = docs.where((d) => d['idioma'] == 'ES').toList();
-      } else if (_ingles && !_espanol) {
-        docs = docs.where((d) => d['idioma'] == 'EN').toList();
-      }
 
       if (_conStock && !_sinStock) {
         docs = docs.where((d) {
@@ -107,7 +91,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'DEPÓSITO DE ETIQUETAS - GALMEDIC',
+                    'DEPÓSITO DE CAJAS - GALMEDIC',
                     style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
@@ -157,9 +141,8 @@ class _ReportesScreenState extends State<ReportesScreen> {
                 columnWidths: {
                   0: const pw.FlexColumnWidth(3),
                   1: const pw.FlexColumnWidth(1.5),
-                  2: const pw.FlexColumnWidth(1),
+                  2: const pw.FlexColumnWidth(1.5),
                   3: const pw.FlexColumnWidth(1.5),
-                  4: const pw.FlexColumnWidth(1.5),
                 },
                 children: [
                   pw.TableRow(
@@ -168,8 +151,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                     ),
                     children: [
                       'NOMBRE',
-                      'TIPO',
-                      'IDIOMA',
+                      'CÓDIGO',
                       'STOCK',
                       'CONTEO',
                     ]
@@ -201,17 +183,16 @@ class _ReportesScreenState extends State<ReportesScreen> {
                       stockMostrar =
                           (data['stockActual'] as num?)?.toInt() ?? 0;
                     }
-                    final bajominimo = stockMostrar < 1000;
+                    final bajoMinimo = stockMostrar < 1000;
                     return pw.TableRow(
                       decoration: pw.BoxDecoration(
-                        color: bajominimo
+                        color: bajoMinimo
                             ? PdfColor.fromHex('#FFF3E0')
                             : PdfColors.white,
                       ),
                       children: [
                         data['nombre'] ?? '',
-                        data['tipo'] ?? '',
-                        data['idioma'] ?? '',
+                        data['codigo'] ?? '',
                         stockMostrar.toString(),
                         '',
                       ]
@@ -222,7 +203,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                                 v,
                                 style: pw.TextStyle(
                                   fontSize: 10,
-                                  color: bajominimo
+                                  color: bajoMinimo
                                       ? PdfColor.fromHex('#E65100')
                                       : PdfColors.black,
                                 ),
@@ -289,48 +270,15 @@ class _ReportesScreenState extends State<ReportesScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.primary),
-                        ),
-                        child: ExpansionTile(
-                          title: const Text(
-                            'Tipo e idioma',
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          iconColor: AppColors.primary,
-                          collapsedIconColor: AppColors.primary,
-                          children: [
-                            Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  _buildChip('Con stock', _conStock,
-                                      (v) => setState(() => _conStock = v)),
-                                  _buildChip('Sin stock', _sinStock,
-                                      (v) => setState(() => _sinStock = v)),
-                                  _buildChip('Etiquetas', _etiquetas,
-                                      (v) => setState(() => _etiquetas = v)),
-                                  _buildChip('Prospectos', _prospectos,
-                                      (v) => setState(() => _prospectos = v)),
-                                  _buildChip('Español', _espanol,
-                                      (v) => setState(() => _espanol = v)),
-                                  _buildChip('Inglés', _ingles,
-                                      (v) => setState(() => _ingles = v)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildChip('Con stock', _conStock,
+                              (v) => setState(() => _conStock = v)),
+                          _buildChip('Sin stock', _sinStock,
+                              (v) => setState(() => _sinStock = v)),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       Container(
@@ -342,7 +290,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                         child: ExpansionTile(
                           title: Text(
                             _prefijosSeleccionados.isEmpty
-                                ? 'Código'
+                                ? 'Filtrar por código'
                                 : 'Código: ${(_prefijosSeleccionados.toList()..sort()).join(', ')}',
                             style: const TextStyle(
                               color: AppColors.primary,
@@ -385,11 +333,9 @@ class _ReportesScreenState extends State<ReportesScreen> {
                                               seleccionado,
                                               (v) => setState(() {
                                                 if (v) {
-                                                  _prefijosSeleccionados
-                                                      .add(p);
+                                                  _prefijosSeleccionados.add(p);
                                                 } else {
-                                                  _prefijosSeleccionados
-                                                      .remove(p);
+                                                  _prefijosSeleccionados.remove(p);
                                                 }
                                               }),
                                             );

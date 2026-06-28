@@ -21,9 +21,15 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
   bool _buscado = false;
   bool _generando = false;
 
+  // Panel de perdidos
+  String? _expandidoId;
+  final _perdidosController = TextEditingController();
+  bool _guardandoPerdidos = false;
+
   @override
   void dispose() {
     _loteController.dispose();
+    _perdidosController.dispose();
     super.dispose();
   }
 
@@ -34,14 +40,17 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
     setState(() {
       _buscando = true;
       _buscado = false;
+      _expandidoId = null;
     });
 
     final docs = await DataMaster().obtenerRetiros(lote: lote);
 
     docs.sort((a, b) {
-      final fechaA = DateTime.tryParse(a['fecha'] as String? ?? '') ?? DateTime(2000);
-      final fechaB = DateTime.tryParse(b['fecha'] as String? ?? '') ?? DateTime(2000);
-      return fechaA.compareTo(fechaB);
+      final fechaA =
+          DateTime.tryParse(a['fecha'] as String? ?? '') ?? DateTime(2000);
+      final fechaB =
+          DateTime.tryParse(b['fecha'] as String? ?? '') ?? DateTime(2000);
+      return fechaB.compareTo(fechaA);
     });
 
     setState(() {
@@ -49,6 +58,61 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
       _buscando = false;
       _buscado = true;
     });
+  }
+
+  Future<void> _registrarPerdidos(Map<String, dynamic> data) async {
+    final cantidad = int.tryParse(_perdidosController.text.trim());
+
+    if (cantidad == null || cantidad <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresa una cantidad válida'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _guardandoPerdidos = true);
+
+    try {
+      final retiroId = data['id']?.toString() ?? '';
+      final perdidosActuales = (data['cantidadDevuelta'] as num?)?.toInt() ?? 0;
+      final nuevosPerdidos = perdidosActuales + cantidad;
+
+      await DataMaster().cerrarRetiro(
+        retiroId: retiroId,
+        cantidadDevuelta: nuevosPerdidos,
+        motivoCierre: data['motivoCierre']?.toString(),
+      );
+
+      setState(() {
+        _expandidoId = null;
+        _perdidosController.clear();
+        _guardandoPerdidos = false;
+      });
+
+      await _buscar();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$cantidad cajas perdidas registradas'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _guardandoPerdidos = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al registrar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   String _formatFechaHora(String? fechaStr) {
@@ -72,12 +136,10 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
       final lote = _loteController.text.trim();
 
       int totalEntregado = 0;
-      int totalConsumido = 0;
-      int totalDevuelto = 0;
+      int totalPerdidos = 0;
       for (final data in _resultados) {
         totalEntregado += (data['cantidadEntregada'] ?? 0) as int;
-        totalConsumido += (data['consumoReal'] ?? data['cantidadEntregada'] ?? 0) as int;
-        totalDevuelto += (data['cantidadDevuelta'] ?? 0) as int;
+        totalPerdidos += (data['cantidadDevuelta'] ?? 0) as int;
       }
 
       pdf.addPage(
@@ -91,7 +153,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'DEPÓSITO DE ETIQUETAS - GALMEDIC',
+                    'DEPÓSITO DE CAJAS - GALMEDIC',
                     style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
@@ -106,7 +168,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
               ),
               pw.SizedBox(height: 4),
               pw.Text(
-                'TRAZABILIDAD - LOTE: $lote',
+                'HISTORIAL - LOTE: $lote',
                 style: pw.TextStyle(
                   fontSize: 12,
                   fontWeight: pw.FontWeight.bold,
@@ -124,14 +186,11 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                 width: 0.5,
               ),
               columnWidths: {
-                0: const pw.FlexColumnWidth(2),
-                1: const pw.FlexColumnWidth(1),
-                2: const pw.FlexColumnWidth(0.8),
-                3: const pw.FlexColumnWidth(1.2),
-                4: const pw.FlexColumnWidth(1.2),
-                5: const pw.FlexColumnWidth(1.2),
-                6: const pw.FlexColumnWidth(1),
-                7: const pw.FlexColumnWidth(1.5),
+                0: const pw.FlexColumnWidth(2.5),
+                1: const pw.FlexColumnWidth(1.5),
+                2: const pw.FlexColumnWidth(1),
+                3: const pw.FlexColumnWidth(1),
+                4: const pw.FlexColumnWidth(1.5),
               },
               children: [
                 pw.TableRow(
@@ -140,12 +199,9 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                   ),
                   children: [
                     'PRODUCTO',
-                    'TIPO',
-                    'ID',
                     'COMPAÑERO',
-                    'ENTREGADO',
-                    'CONSUMIDO',
-                    'DEVUELTO',
+                    'RETIRADO',
+                    'PERDIDOS',
                     'FECHA',
                   ]
                       .map((h) => pw.Padding(
@@ -162,23 +218,13 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                       .toList(),
                 ),
                 ..._resultados.map((data) {
-                  final consumoReal =
-                      data['consumoReal'] ?? data['cantidadEntregada'] ?? 0;
-                  final estado = data['estado'] ?? 'pendiente';
+                  final perdidos = (data['cantidadDevuelta'] ?? 0) as int;
                   return pw.TableRow(
-                    decoration: pw.BoxDecoration(
-                      color: estado == 'cerrado'
-                          ? PdfColors.white
-                          : PdfColor.fromHex('#FFF3E0'),
-                    ),
                     children: [
                       data['productoNombre'] ?? '',
-                      data['tipo'] ?? '',
-                      data['idioma'] ?? '',
                       data['companero'] ?? '',
                       (data['cantidadEntregada'] ?? 0).toString(),
-                      consumoReal.toString(),
-                      (data['cantidadDevuelta'] ?? 0).toString(),
+                      perdidos > 0 ? perdidos.toString() : '-',
                       _formatFechaHora(data['fecha'] as String?),
                     ]
                         .map((v) => pw.Padding(
@@ -215,11 +261,9 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                   pw.SizedBox(height: 8),
                   pw.Text('Total movimientos: ${_resultados.length}',
                       style: const pw.TextStyle(fontSize: 10)),
-                  pw.Text('Total entregado: $totalEntregado unidades',
+                  pw.Text('Total retirado: $totalEntregado cajas',
                       style: const pw.TextStyle(fontSize: 10)),
-                  pw.Text('Total consumido: $totalConsumido unidades',
-                      style: const pw.TextStyle(fontSize: 10)),
-                  pw.Text('Total devuelto: $totalDevuelto unidades',
+                  pw.Text('Total perdidos: $totalPerdidos cajas',
                       style: const pw.TextStyle(fontSize: 10)),
                 ],
               ),
@@ -278,7 +322,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                             controller: _loteController,
                             textCapitalization: TextCapitalization.sentences,
                             decoration: InputDecoration(
-                              hintText: '',
+                              hintText: 'Número de lote',
                               prefixIcon: const Icon(
                                 Icons.search,
                                 color: AppColors.primary,
@@ -287,8 +331,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                               fillColor: Colors.white,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                    color: AppColors.primary),
+                                borderSide:
+                                    const BorderSide(color: AppColors.primary),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -315,9 +359,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                                   )
                                 : const Text(
                                     'BUSCAR',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w700),
                                   ),
                           ),
                         ),
@@ -370,97 +413,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        ..._resultados.map((data) {
-                          final estado = data['estado'] ?? 'pendiente';
-                          final consumoReal = data['consumoReal'] ??
-                              data['cantidadEntregada'] ?? 0;
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: estado == 'cerrado'
-                                    ? AppColors.primary.withValues(alpha: 0.3)
-                                    : Colors.orange,
-                                width: estado == 'cerrado' ? 1 : 2,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        data['productoNombre'] ?? '',
-                                        style: const TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: estado == 'cerrado'
-                                            ? Colors.green.withValues(alpha: 0.1)
-                                            : Colors.orange.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: estado == 'cerrado'
-                                              ? Colors.green
-                                              : Colors.orange,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        estado == 'cerrado'
-                                            ? 'CERRADO'
-                                            : 'PENDIENTE',
-                                        style: TextStyle(
-                                          color: estado == 'cerrado'
-                                              ? Colors.green
-                                              : Colors.orange,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 4,
-                                  children: [
-                                    _buildTag(data['tipo'] ?? ''),
-                                    _buildTag(data['idioma'] ?? ''),
-                                    _buildTag('🌍 ${data['destino'] ?? ''}'),
-                                    _buildTag('👤 ${data['companero'] ?? ''}'),
-                                    _buildTag('📤 Entregado: ${data['cantidadEntregada'] ?? 0}'),
-                                    _buildTag('✅ Consumido: $consumoReal'),
-                                    if (estado == 'cerrado')
-                                      _buildTag('↩️ Devuelto: ${data['cantidadDevuelta'] ?? 0}'),
-                                    if (data['motivoCierre'] != null)
-                                      _buildTag('📝 ${data['motivoCierre']}'),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _formatFechaHora(data['fecha'] as String?),
-                                  style: TextStyle(
-                                    color: Colors.grey[500],
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
+                        ..._resultados.map((data) => _buildRetiroItem(data)),
                       ],
                     ],
                   ],
@@ -473,23 +426,191 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
     );
   }
 
+  Widget _buildRetiroItem(Map<String, dynamic> data) {
+    final id = data['id']?.toString() ?? '';
+    final expandido = _expandidoId == id;
+    final perdidos = (data['cantidadDevuelta'] as num?)?.toInt() ?? 0;
+    final retirado = (data['cantidadEntregada'] as num?)?.toInt() ?? 0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: expandido
+              ? AppColors.primary
+              : AppColors.primary.withValues(alpha: 0.3),
+          width: expandido ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              setState(() {
+                if (_expandidoId == id) {
+                  _expandidoId = null;
+                } else {
+                  _expandidoId = id;
+                  _perdidosController.clear();
+                }
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data['productoNombre'] ?? '',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            if ((data['companero'] ?? '').toString().isNotEmpty)
+                              _buildTag('👤 ${data['companero']}'),
+                            _buildTag('📤 Retirado: $retirado'),
+                            if (perdidos > 0)
+                              _buildTag(
+                                '⚠️ Perdidos: $perdidos',
+                                color: Colors.orange,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatFechaHora(data['fecha'] as String?),
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    expandido ? Icons.expand_less : Icons.expand_more,
+                    color: AppColors.primary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expandido) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline,
+                            color: Colors.orange, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            perdidos > 0
+                                ? 'Ya hay $perdidos cajas perdidas registradas en este retiro. Podés agregar más.'
+                                : 'Registrá las cajas dañadas en calibración. Se descontarán del stock.',
+                            style: const TextStyle(
+                              color: Colors.orange,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'CAJAS PERDIDAS',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    style: const TextStyle(color: Color(0xFF0c6246)),
+                    controller: _perdidosController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: 'Ej: 20',
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            const BorderSide(color: AppColors.primary),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: AppColors.primary, width: 2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _guardandoPerdidos
+                          ? null
+                          : () => _registrarPerdidos(data),
+                      child: _guardandoPerdidos
+                          ? const CircularProgressIndicator(
+                              color: Colors.white)
+                          : const Text(
+                              'REGISTRAR PERDIDOS',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildResumen() {
     int totalEntregado = 0;
-    int totalConsumido = 0;
-    int totalDevuelto = 0;
-    int cerrados = 0;
-    int pendientes = 0;
+    int totalPerdidos = 0;
 
     for (final data in _resultados) {
       totalEntregado += (data['cantidadEntregada'] ?? 0) as int;
-      totalConsumido +=
-          (data['consumoReal'] ?? data['cantidadEntregada'] ?? 0) as int;
-      totalDevuelto += (data['cantidadDevuelta'] ?? 0) as int;
-      if (data['estado'] == 'cerrado') {
-        cerrados++;
-      } else {
-        pendientes++;
-      }
+      totalPerdidos += (data['cantidadDevuelta'] ?? 0) as int;
     }
 
     return Container(
@@ -514,21 +635,16 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
           Row(
             children: [
               Expanded(
-                  child: _buildResumenItem('ENTREGADO', totalEntregado.toString())),
+                child: _buildResumenItem(
+                    'MOVIMIENTOS', _resultados.length.toString()),
+              ),
               Expanded(
-                  child: _buildResumenItem('CONSUMIDO', totalConsumido.toString())),
+                child:
+                    _buildResumenItem('RETIRADO', totalEntregado.toString()),
+              ),
               Expanded(
-                  child: _buildResumenItem('DEVUELTO', totalDevuelto.toString())),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                  child: _buildResumenItem('CERRADOS', cerrados.toString())),
-              Expanded(
-                  child: _buildResumenItem('PENDIENTES', pendientes.toString())),
-              const Expanded(child: SizedBox()),
+                child: _buildResumenItem('PERDIDOS', totalPerdidos.toString()),
+              ),
             ],
           ),
         ],
@@ -560,17 +676,17 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
     );
   }
 
-  Widget _buildTag(String label) {
+  Widget _buildTag(String label, {Color? color}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.08),
+        color: (color ?? AppColors.primary).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.primary,
+        style: TextStyle(
+          color: color ?? AppColors.primary,
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
@@ -596,7 +712,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
           ),
           const SizedBox(width: 8),
           Text(
-            'HISTORIAL POR LOTE',
+            'HISTORIAL',
             style: TextStyle(
               color: Colors.white,
               fontSize: Breakpoints.isMobile(context) ? 20 : 28,

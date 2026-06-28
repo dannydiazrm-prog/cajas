@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.jplabs.cajas"
+    namespace = "com.jplabs.etiquetas"
     compileSdk = 36
     ndkVersion = "29.0.14206865"
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.jplabs.cajas"
+        applicationId = "com.jplabs.etiquetas"
         minSdk = 24
         targetSdk = 35
         versionCode = flutter.versionCode

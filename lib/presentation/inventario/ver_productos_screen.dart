@@ -15,13 +15,9 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
   final _nombreController = TextEditingController();
   bool _conStock = false;
   bool _sinStock = false;
-  bool _prospectos = false;
-  bool _etiquetas = false;
-  bool _ingles = false;
-  bool _espanol = false;
   Set<String> _prefijosSeleccionados = {};
   List<String> _prefijosUsados = [];
-  bool _cargandoPrefijos = true; // Flag para distinguir "cargando" de "vacío"
+  bool _cargandoPrefijos = true;
   List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
@@ -65,7 +61,6 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
       _buscado = false;
     });
 
-    // Recargar prefijos en cada búsqueda para que estén actualizados
     final usados = await DataMaster().obtenerPrefijosUsados();
     if (mounted) {
       setState(() {
@@ -76,29 +71,15 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
 
     List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
 
-    // Filtro tipo
-    if (_etiquetas && !_prospectos) {
-      docs = docs.where((d) => d['tipo'] == 'Etiqueta').toList();
-    } else if (_prospectos && !_etiquetas) {
-      docs = docs.where((d) => d['tipo'] == 'Prospecto').toList();
-    }
-
-    // Filtro idioma
-    if (_espanol && !_ingles) {
-      docs = docs.where((d) => d['idioma'] == 'ES').toList();
-    } else if (_ingles && !_espanol) {
-      docs = docs.where((d) => d['idioma'] == 'EN').toList();
-    }
-
-    // Filtro nombre
     final nombre = _nombreController.text.trim().toLowerCase();
     if (nombre.isNotEmpty) {
       docs = docs.where((d) {
-        return (d['nombre'] ?? '').toString().toLowerCase().contains(nombre);
+        final matchNombre = (d['nombre'] ?? '').toString().toLowerCase().contains(nombre);
+        final matchCodigo = (d['codigo'] ?? '').toString().toLowerCase().contains(nombre);
+        return matchNombre || matchCodigo;
       }).toList();
     }
 
-    // Filtro stock
     if (_conStock && !_sinStock) {
       docs = docs
           .where((d) => ((d['stockActual'] as num?)?.toInt() ?? 0) > 0)
@@ -221,8 +202,8 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
 
   Future<void> _editar(Map<String, dynamic> data) async {
     final nombreCtrl = TextEditingController(text: data['nombre'] ?? '');
-    String tipo = data['tipo'] ?? 'Etiqueta';
-    String idioma = data['idioma'] ?? 'ES';
+    final codigoCtrl = TextEditingController(text: data['codigo'] ?? '');
+    String errorDialog = '';
 
     await showDialog(
       context: context,
@@ -240,13 +221,16 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Nombre',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary)),
+                const Text(
+                  'Nombre',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
+                  style: const TextStyle(color: Color(0xFF0c6246)),
                   controller: nombreCtrl,
                   decoration: InputDecoration(
                     filled: true,
@@ -257,87 +241,39 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Tipo',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary)),
-                const SizedBox(height: 8),
-                Row(
-                  children: ['Etiqueta', 'Prospecto'].map((t) {
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: GestureDetector(
-                          onTap: () => setStateDialog(() => tipo = t),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: tipo == t
-                                  ? AppColors.primary
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.primary),
-                            ),
-                            child: Center(
-                              child: Text(
-                                t,
-                                style: TextStyle(
-                                  color: tipo == t
-                                      ? Colors.white
-                                      : AppColors.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                const Text(
+                  'Código (5 dígitos)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
                 ),
-                const SizedBox(height: 16),
-                const Text('Idioma',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary)),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    {'label': 'ESPAÑOL', 'value': 'ES'},
-                    {'label': 'INGLÉS', 'value': 'EN'},
-                  ].map((i) {
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: GestureDetector(
-                          onTap: () =>
-                              setStateDialog(() => idioma = i['value']!),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: idioma == i['value']
-                                  ? AppColors.primary
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.primary),
-                            ),
-                            child: Center(
-                              child: Text(
-                                i['label']!,
-                                style: TextStyle(
-                                  color: idioma == i['value']
-                                      ? Colors.white
-                                      : AppColors.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                TextField(
+                  style: const TextStyle(color: Color(0xFF0c6246)),
+                  controller: codigoCtrl,
+                  keyboardType: TextInputType.number,
+                  maxLength: 5,
+                  decoration: InputDecoration(
+                    hintText: 'Ej: 65123',
+                    counterText: '',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
+                if (errorDialog.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    errorDialog,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -351,11 +287,21 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                 backgroundColor: AppColors.primary,
               ),
               onPressed: () async {
+                final nombre = nombreCtrl.text.trim();
+                final codigo = codigoCtrl.text.trim();
+                if (nombre.isEmpty) {
+                  setStateDialog(() => errorDialog = 'Ingresa el nombre');
+                  return;
+                }
+                if (codigo.length != 5 || int.tryParse(codigo) == null) {
+                  setStateDialog(
+                      () => errorDialog = 'Ingresa los 5 dígitos del código');
+                  return;
+                }
                 await DataMaster().actualizarProducto(
                   id: _docId(data),
-                  nombre: nombreCtrl.text.trim(),
-                  tipo: tipo,
-                  idioma: idioma,
+                  nombre: nombre,
+                  codigo: codigo,
                 );
                 if (ctx.mounted) Navigator.pop(ctx);
                 _buscar();
@@ -445,47 +391,34 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.primary),
-          ),
-          child: ExpansionTile(
-            title: const Text(
-              'Tipo e idioma',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
+        TextField(
+          style: const TextStyle(color: Color(0xFF0c6246)),
+          controller: _nombreController,
+          decoration: InputDecoration(
+            hintText: 'Buscar por nombre o código',
+            prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary),
             ),
-            iconColor: AppColors.primary,
-            collapsedIconColor: AppColors.primary,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildChip('Con stock', _conStock,
-                        (v) => setState(() => _conStock = v)),
-                    _buildChip('Sin stock', _sinStock,
-                        (v) => setState(() => _sinStock = v)),
-                    _buildChip('Etiquetas', _etiquetas,
-                        (v) => setState(() => _etiquetas = v)),
-                    _buildChip('Prospectos', _prospectos,
-                        (v) => setState(() => _prospectos = v)),
-                    _buildChip('Español', _espanol,
-                        (v) => setState(() => _espanol = v)),
-                    _buildChip('Inglés', _ingles,
-                        (v) => setState(() => _ingles = v)),
-                  ],
-                ),
-              ),
-            ],
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+            ),
           ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildChip('Con stock', _conStock,
+                (v) => setState(() => _conStock = v)),
+            _buildChip('Sin stock', _sinStock,
+                (v) => setState(() => _sinStock = v)),
+          ],
         ),
         const SizedBox(height: 12),
         Container(
@@ -497,7 +430,7 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
           child: ExpansionTile(
             title: Text(
               _prefijosSeleccionados.isEmpty
-                  ? 'Código'
+                  ? 'Filtrar por código'
                   : 'Código: ${(_prefijosSeleccionados.toList()..sort()).join(', ')}',
               style: const TextStyle(
                 color: AppColors.primary,
@@ -591,7 +524,8 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
       etiquetaCodigo = null;
     }
 
-    final bajominimo = stockMostrar < 1000;
+    final bajoMinimo = stockMostrar < 1000;
+    final codigoProducto = data['codigo']?.toString() ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -600,10 +534,10 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: bajominimo
+          color: bajoMinimo
               ? Colors.orange
               : AppColors.primary.withValues(alpha: 0.3),
-          width: bajominimo ? 2 : 1,
+          width: bajoMinimo ? 2 : 1,
         ),
       ),
       child: Row(
@@ -623,16 +557,15 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    _buildTag(data['tipo'] ?? ''),
-                    const SizedBox(width: 8),
-                    _buildTag(data['idioma'] ?? ''),
-                    const SizedBox(width: 8),
+                    if (codigoProducto.isNotEmpty)
+                      _buildTag('Cód: $codigoProducto'),
+                    if (codigoProducto.isNotEmpty) const SizedBox(width: 8),
                     if (etiquetaCodigo != null)
-                      _buildTag('Cód. $etiquetaCodigo'),
+                      _buildTag('Lote: $etiquetaCodigo'),
                     if (etiquetaCodigo != null) const SizedBox(width: 8),
                     _buildTag(
                       'Stock: $stockMostrar',
-                      color: bajominimo ? Colors.orange : AppColors.primary,
+                      color: bajoMinimo ? Colors.orange : AppColors.primary,
                     ),
                   ],
                 ),

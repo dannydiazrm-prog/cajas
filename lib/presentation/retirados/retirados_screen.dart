@@ -65,25 +65,13 @@ class _Body extends StatelessWidget {
       label: 'NUEVO RETIRO',
       route: '/retirados/nuevo',
       icon: Icons.output_outlined,
-      descripcion: 'Registrar salida de etiqueta o prospecto',
+      descripcion: 'Registrar salida de cajas',
     ),
     _MenuButton(
-      label: 'PENDIENTES DE DEVOLUCIÓN',
-      route: '/retirados/pendientes',
-      icon: Icons.pending_actions_outlined,
-      descripcion: 'Retiros abiertos sin devolver',
-    ),
-    _MenuButton(
-      label: 'RETIROS DEL DÍA',
-      route: '/retirados/del-dia',
-      icon: Icons.today_outlined,
-      descripcion: 'Informe de cierre de turno',
-    ),
-    _MenuButton(
-      label: 'HISTORIAL POR LOTE',
+      label: 'HISTORIAL',
       route: '/retirados/historial',
       icon: Icons.manage_search_outlined,
-      descripcion: 'Trazabilidad por lote de producto final',
+      descripcion: 'Historial de retiros',
     ),
   ];
 

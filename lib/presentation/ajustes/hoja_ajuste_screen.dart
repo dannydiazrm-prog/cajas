@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
@@ -13,22 +12,13 @@ class HojaAjusteScreen extends StatefulWidget {
 }
 
 class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
-  // ── Paso 1: buscar producto ──
   final _nombreController = TextEditingController();
-  bool _etiquetas = false;
-  bool _prospectos = false;
-  bool _espanol = false;
-  bool _ingles = false;
   List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
 
-  // ── Paso 2: producto seleccionado ──
   Map<String, dynamic>? _productoSeleccionado;
-  List<Map<String, dynamic>> _combinaciones = [];
-  Map<String, dynamic>? _combinacionSeleccionada;
 
-  // ── Paso 3: formulario ──
   final _companeroController = TextEditingController();
   final _cantidadController = TextEditingController();
   String? _motivo;
@@ -56,32 +46,21 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
       _buscando = true;
       _buscado = false;
       _productoSeleccionado = null;
-      _combinaciones = [];
-      _combinacionSeleccionada = null;
     });
 
     List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
 
-    if (_etiquetas && !_prospectos) {
-      docs = docs.where((d) => d['tipo'] == 'Etiqueta').toList();
-    } else if (_prospectos && !_etiquetas) {
-      docs = docs.where((d) => d['tipo'] == 'Prospecto').toList();
-    }
-    if (_espanol && !_ingles) {
-      docs = docs.where((d) => d['idioma'] == 'ES').toList();
-    } else if (_ingles && !_espanol) {
-      docs = docs.where((d) => d['idioma'] == 'EN').toList();
-    }
-
-    final nombre = _nombreController.text.trim().toLowerCase();
-    if (nombre.isNotEmpty) {
-      docs = docs
-          .where((d) =>
-              (d['nombre'] ?? '').toString().toLowerCase().contains(nombre))
-          .toList();
+    final busqueda = _nombreController.text.trim().toLowerCase();
+    if (busqueda.isNotEmpty) {
+      docs = docs.where((d) {
+        final matchNombre =
+            (d['nombre'] ?? '').toString().toLowerCase().contains(busqueda);
+        final matchCodigo =
+            (d['codigo'] ?? '').toString().toLowerCase().contains(busqueda);
+        return matchNombre || matchCodigo;
+      }).toList();
     }
 
-    // Solo productos con stock disponible
     docs = docs
         .where((d) => ((d['stockActual'] as num?)?.toInt() ?? 0) > 0)
         .toList();
@@ -93,14 +72,9 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     });
   }
 
-  Future<void> _seleccionarProducto(Map<String, dynamic> producto) async {
-    final combinaciones = await DataMaster()
-        .obtenerCombinacionesRecepcion(producto['id'].toString());
-
+  void _seleccionarProducto(Map<String, dynamic> producto) {
     setState(() {
       _productoSeleccionado = producto;
-      _combinaciones = combinaciones;
-      _combinacionSeleccionada = null;
       _companeroController.clear();
       _cantidadController.clear();
       _motivo = null;
@@ -110,13 +84,10 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
   Future<void> _guardar() async {
     final companero = _companeroController.text.trim();
     final cantidad = int.tryParse(_cantidadController.text.trim());
-    final combinacion = _combinacionSeleccionada;
     final producto = _productoSeleccionado;
 
-    if (producto == null || combinacion == null) {
-      _mostrarError('Seleccioná un producto y una combinación');
-      return;
-    }
+    if (producto == null) return;
+
     if (companero.isEmpty) {
       _mostrarError('Ingresá el nombre del compañero');
       return;
@@ -125,9 +96,11 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
       _mostrarError('Ingresá una cantidad válida');
       return;
     }
-    final disponible = (combinacion['cantidadActual'] as num?)?.toInt() ?? 0;
-    if (cantidad > disponible) {
-      _mostrarError('La cantidad supera el stock disponible ($disponible)');
+    final stockDisponible =
+        (producto['stockActual'] as num?)?.toInt() ?? 0;
+    if (cantidad > stockDisponible) {
+      _mostrarError(
+          'La cantidad supera el stock disponible ($stockDisponible)');
       return;
     }
     if (_motivo == null) {
@@ -138,8 +111,13 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     setState(() => _guardando = true);
 
     try {
-      final recepcionIds =
-          List<String>.from(combinacion['recepcionIds'] as List);
+      // Obtener todos los recepcionIds del producto
+      final combinaciones = await DataMaster()
+          .obtenerCombinacionesRecepcion(producto['id'].toString());
+
+      final recepcionIds = combinaciones
+          .expand((c) => List<String>.from(c['recepcionIds'] as List? ?? []))
+          .toList();
 
       await DataMaster().registrarHojaAjuste(
         productoId: producto['id'].toString(),
@@ -173,14 +151,6 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     );
   }
 
-  String _formatDestinos(dynamic destinosIds) {
-    if (destinosIds == null) return '';
-    final List<dynamic> ids = destinosIds is List
-        ? destinosIds
-        : List.from(jsonDecode(destinosIds.toString()));
-    return ids.join(' · ');
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -196,7 +166,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_productoSeleccionado == null) ...[
-                      _buildFiltros(),
+                      _buildBuscador(),
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
@@ -233,32 +203,8 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                       ..._resultados.map((doc) => _buildProductoItem(doc)),
                     ] else ...[
                       _buildProductoElegido(),
-                      const SizedBox(height: 20),
-                      if (_combinaciones.isEmpty)
-                        const Center(
-                          child: Text(
-                            'Sin combinaciones disponibles',
-                            style: TextStyle(color: AppColors.primary),
-                          ),
-                        )
-                      else ...[
-                        const Text(
-                          'SELECCIONÁ COMBINACIÓN',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ..._combinaciones
-                            .map((c) => _buildCombinacionItem(c)),
-                      ],
-                      if (_combinacionSeleccionada != null) ...[
-                        const SizedBox(height: 24),
-                        _buildFormulario(),
-                      ],
+                      const SizedBox(height: 24),
+                      _buildFormulario(),
                     ],
                   ],
                 ),
@@ -270,8 +216,95 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     );
   }
 
+  Widget _buildBuscador() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'BUSCAR PRODUCTO',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.1,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          style: const TextStyle(color: Color(0xFF0c6246)),
+          controller: _nombreController,
+          decoration: InputDecoration(
+            hintText: 'Buscar por nombre o código',
+            prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProductoItem(Map<String, dynamic> data) {
+    final codigo = data['codigo']?.toString() ?? '';
+    final stock = (data['stockActual'] as num?)?.toInt() ?? 0;
+
+    return GestureDetector(
+      onTap: () => _seleccionarProducto(data),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    data['nombre'] ?? '',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      if (codigo.isNotEmpty) _buildTag('Cód: $codigo'),
+                      _buildTag('Stock: $stock'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios,
+                color: AppColors.primary, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProductoElegido() {
     final p = _productoSeleccionado!;
+    final codigo = p['codigo']?.toString() ?? '';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -297,8 +330,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                 Wrap(
                   spacing: 8,
                   children: [
-                    _buildTag(p['tipo'] ?? ''),
-                    _buildTag(p['idioma'] ?? ''),
+                    if (codigo.isNotEmpty) _buildTag('Cód: $codigo'),
                     _buildTag(
                         'Stock: ${(p['stockActual'] as num?)?.toInt() ?? 0}'),
                   ],
@@ -309,8 +341,6 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
           TextButton(
             onPressed: () => setState(() {
               _productoSeleccionado = null;
-              _combinaciones = [];
-              _combinacionSeleccionada = null;
             }),
             child: const Text(
               'Cambiar',
@@ -318,63 +348,6 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCombinacionItem(Map<String, dynamic> c) {
-    final seleccionado = _combinacionSeleccionada == c;
-    final disponible = (c['cantidadActual'] as num?)?.toInt() ?? 0;
-    final prefijo = c['prefijo']?.toString() ?? '';
-    final destinos = c['destinosNombres']?.toString() ?? '';
-
-    return GestureDetector(
-      onTap: () => setState(() => _combinacionSeleccionada = c),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: seleccionado
-              ? AppColors.primary.withValues(alpha: 0.08)
-              : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: seleccionado
-                ? AppColors.primary
-                : AppColors.primary.withValues(alpha: 0.3),
-            width: seleccionado ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    destinos,
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      _buildTag('Código: $prefijo'),
-                      _buildTag('Disponible: $disponible'),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (seleccionado)
-              const Icon(Icons.check_circle, color: AppColors.primary),
-          ],
-        ),
       ),
     );
   }
@@ -394,7 +367,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         ),
         const SizedBox(height: 8),
         TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
+          style: const TextStyle(color: Color(0xFF0c6246)),
           controller: _companeroController,
           textCapitalization: TextCapitalization.words,
           decoration: _inputDecoration('Nombre del compañero'),
@@ -411,7 +384,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
         ),
         const SizedBox(height: 8),
         TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
+          style: const TextStyle(color: Color(0xFF0c6246)),
           controller: _cantidadController,
           keyboardType: TextInputType.number,
           decoration: _inputDecoration('Ej: 500'),
@@ -470,131 +443,6 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildProductoItem(Map<String, dynamic> data) {
-    return GestureDetector(
-      onTap: () => _seleccionarProducto(data),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    data['nombre'] ?? '',
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      _buildTag(data['tipo'] ?? ''),
-                      _buildTag(data['idioma'] ?? ''),
-                      _buildTag(
-                          'Stock: ${(data['stockActual'] as num?)?.toInt() ?? 0}'),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios,
-                color: AppColors.primary, size: 14),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFiltros() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'FILTROS',
-          style: TextStyle(
-            color: AppColors.primary,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.1,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
-          controller: _nombreController,
-          decoration: InputDecoration(
-            hintText: 'Buscar por nombre',
-            prefixIcon:
-                const Icon(Icons.search, color: AppColors.primary),
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primary),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: AppColors.primary, width: 2),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildChip('Etiquetas', _etiquetas,
-                (v) => setState(() => _etiquetas = v)),
-            _buildChip('Prospectos', _prospectos,
-                (v) => setState(() => _prospectos = v)),
-            _buildChip('Español', _espanol,
-                (v) => setState(() => _espanol = v)),
-            _buildChip('Inglés', _ingles,
-                (v) => setState(() => _ingles = v)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildChip(
-      String label, bool seleccionado, Function(bool) onTap) {
-    return GestureDetector(
-      onTap: () => onTap(!seleccionado),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: seleccionado ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primary),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: seleccionado ? Colors.white : AppColors.primary,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-        ),
-      ),
     );
   }
 

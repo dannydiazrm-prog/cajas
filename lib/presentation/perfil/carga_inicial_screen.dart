@@ -13,17 +13,12 @@ class CargaInicialScreen extends StatefulWidget {
 
 class _CargaInicialScreenState extends State<CargaInicialScreen> {
   final _nombreController = TextEditingController();
-  bool _etiquetas = false;
-  bool _prospectos = false;
-  bool _espanol = false;
-  bool _ingles = false;
   List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
   String? _expandidoId;
 
   final _cantidadController = TextEditingController();
-  final _codigoController = TextEditingController();
   List<Map<String, dynamic>> _destinos = [];
   Map<String, bool> _destinosSeleccionados = {};
   bool _guardando = false;
@@ -32,7 +27,6 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
   void dispose() {
     _nombreController.dispose();
     _cantidadController.dispose();
-    _codigoController.dispose();
     super.dispose();
   }
 
@@ -45,22 +39,14 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
 
     List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
 
-    if (_etiquetas && !_prospectos) {
-      docs = docs.where((d) => d['tipo'] == 'Etiqueta').toList();
-    } else if (_prospectos && !_etiquetas) {
-      docs = docs.where((d) => d['tipo'] == 'Prospecto').toList();
-    }
-
-    if (_espanol && !_ingles) {
-      docs = docs.where((d) => d['idioma'] == 'ES').toList();
-    } else if (_ingles && !_espanol) {
-      docs = docs.where((d) => d['idioma'] == 'EN').toList();
-    }
-
-    final nombre = _nombreController.text.trim().toLowerCase();
-    if (nombre.isNotEmpty) {
+    final busqueda = _nombreController.text.trim().toLowerCase();
+    if (busqueda.isNotEmpty) {
       docs = docs.where((d) {
-        return (d['nombre'] ?? '').toString().toLowerCase().contains(nombre);
+        final matchNombre =
+            (d['nombre'] ?? '').toString().toLowerCase().contains(busqueda);
+        final matchCodigo =
+            (d['codigo'] ?? '').toString().toLowerCase().contains(busqueda);
+        return matchNombre || matchCodigo;
       }).toList();
     }
 
@@ -86,13 +72,12 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
     });
   }
 
-  Future<void> _expandir(String id, Map<String, dynamic> data) async {
+  Future<void> _expandir(String id) async {
     if (_expandidoId == id) {
       setState(() => _expandidoId = null);
       return;
     }
     _cantidadController.clear();
-    _codigoController.clear();
     await _cargarDestinos();
 
     setState(() {
@@ -105,7 +90,7 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
 
   Future<void> _confirmar(Map<String, dynamic> data) async {
     final cantidad = int.tryParse(_cantidadController.text.trim());
-    final codigo = _codigoController.text.trim();
+    final codigo = data['codigo']?.toString() ?? '';
 
     if (cantidad == null || cantidad <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -117,10 +102,10 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
       return;
     }
 
-    if (codigo.isEmpty || codigo.length != 5 || int.tryParse(codigo) == null) {
+    if (codigo.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ingresa los 5 dígitos del código'),
+          content: Text('Este producto no tiene código asignado'),
           backgroundColor: Colors.red,
         ),
       );
@@ -148,7 +133,6 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
       final productoId = data['id']?.toString() ?? '';
       final String destinoClave = destinosHabilitados.first;
 
-      // Usa registrarCargaInicial — no aparece en historial de recepciones
       await DataMaster().registrarCargaInicial(
         productoId: productoId,
         productoNombre: data['nombre'] ?? '',
@@ -163,7 +147,6 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
       setState(() {
         _expandidoId = null;
         _guardando = false;
-        _codigoController.clear();
       });
 
       _buscar();
@@ -231,7 +214,7 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _buildFiltros(),
+                    _buildBuscador(),
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
@@ -280,8 +263,47 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
     );
   }
 
+  Widget _buildBuscador() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'BUSCAR PRODUCTO',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.1,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          style: const TextStyle(color: Color(0xFF0c6246)),
+          controller: _nombreController,
+          decoration: InputDecoration(
+            hintText: 'Buscar por nombre o código',
+            prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildProductoItem(Map<String, dynamic> data, bool expandido) {
     final id = data['id']?.toString() ?? '';
+    final codigo = data['codigo']?.toString() ?? '';
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.only(bottom: 12),
@@ -299,7 +321,7 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
         children: [
           InkWell(
             borderRadius: BorderRadius.circular(12),
-            onTap: () => _expandir(id, data),
+            onTap: () => _expandir(id),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -319,10 +341,9 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            _buildTag(data['tipo'] ?? ''),
-                            const SizedBox(width: 8),
-                            _buildTag(data['idioma'] ?? ''),
-                            const SizedBox(width: 8),
+                            if (codigo.isNotEmpty)
+                              _buildTag('Cód: $codigo'),
+                            if (codigo.isNotEmpty) const SizedBox(width: 8),
                             _buildTag(
                                 'Stock: ${(data['stockActual'] as num?)?.toInt() ?? 0}'),
                           ],
@@ -356,44 +377,11 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
+                    style: const TextStyle(color: Color(0xFF0c6246)),
                     controller: _cantidadController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       hintText: 'Ej: 5000',
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: AppColors.primary),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'CÓDIGO (5 DÍGITOS)',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
-                    controller: _codigoController,
-                    keyboardType: TextInputType.number,
-                    maxLength: 5,
-                    decoration: InputDecoration(
-                      hintText: 'Ej: 65123',
-                      counterText: '',
                       filled: true,
                       fillColor: Colors.grey[50],
                       border: OutlineInputBorder(
@@ -506,83 +494,6 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildFiltros() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'FILTROS',
-          style: TextStyle(
-            color: AppColors.primary,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.1,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
-          controller: _nombreController,
-          decoration: InputDecoration(
-            hintText: 'Buscar por nombre',
-            prefixIcon:
-                const Icon(Icons.search, color: AppColors.primary),
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primary),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: AppColors.primary, width: 2),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildChip('Etiquetas', _etiquetas,
-                (v) => setState(() => _etiquetas = v)),
-            _buildChip('Prospectos', _prospectos,
-                (v) => setState(() => _prospectos = v)),
-            _buildChip('Español', _espanol,
-                (v) => setState(() => _espanol = v)),
-            _buildChip('Ingles', _ingles,
-                (v) => setState(() => _ingles = v)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildChip(
-      String label, bool seleccionado, Function(bool) onTap) {
-    return GestureDetector(
-      onTap: () => onTap(!seleccionado),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: seleccionado ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primary),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: seleccionado ? Colors.white : AppColors.primary,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-        ),
       ),
     );
   }

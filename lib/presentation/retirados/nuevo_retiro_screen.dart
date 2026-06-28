@@ -14,10 +14,6 @@ class NuevoRetiroScreen extends StatefulWidget {
 class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   // Paso 1: Búsqueda
   final _nombreController = TextEditingController();
-  bool _etiquetas = false;
-  bool _prospectos = false;
-  bool _espanol = false;
-  bool _ingles = false;
   List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
@@ -26,14 +22,9 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   Map<String, dynamic>? _productoSeleccionado;
   final _companeroController = TextEditingController();
   final _loteController = TextEditingController();
-  final _cantidadEstimadaController = TextEditingController();
-  final _cantidadEntregadaController = TextEditingController();
+  final _cantidadController = TextEditingController();
 
-  // Combinaciones de destinos por recepción
   List<Map<String, dynamic>> _combinaciones = [];
-  Map<String, dynamic>? _combinacionSeleccionada;
-
-  // Mapa de nombre por ID de destino
   Map<String, String> _nombresDestinos = {};
 
   bool _guardando = false;
@@ -59,8 +50,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     _nombreController.dispose();
     _companeroController.dispose();
     _loteController.dispose();
-    _cantidadEstimadaController.dispose();
-    _cantidadEntregadaController.dispose();
+    _cantidadController.dispose();
     super.dispose();
   }
 
@@ -73,27 +63,20 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
 
     List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
 
-    if (_etiquetas && !_prospectos) {
-      docs = docs.where((d) => d['tipo'] == 'Etiqueta').toList();
-    } else if (_prospectos && !_etiquetas) {
-      docs = docs.where((d) => d['tipo'] == 'Prospecto').toList();
-    }
-
-    if (_espanol && !_ingles) {
-      docs = docs.where((d) => d['idioma'] == 'ES').toList();
-    } else if (_ingles && !_espanol) {
-      docs = docs.where((d) => d['idioma'] == 'EN').toList();
-    }
-
-    final nombre = _nombreController.text.trim().toLowerCase();
-    if (nombre.isNotEmpty) {
+    final busqueda = _nombreController.text.trim().toLowerCase();
+    if (busqueda.isNotEmpty) {
       docs = docs.where((d) {
-        return (d['nombre'] ?? '').toString().toLowerCase().contains(nombre);
+        final matchNombre =
+            (d['nombre'] ?? '').toString().toLowerCase().contains(busqueda);
+        final matchCodigo =
+            (d['codigo'] ?? '').toString().toLowerCase().contains(busqueda);
+        return matchNombre || matchCodigo;
       }).toList();
     }
 
-    // Solo mostrar productos con stock
-    docs = docs.where((d) => ((d['stockActual'] as num?)?.toInt() ?? 0) > 0).toList();
+    docs = docs
+        .where((d) => ((d['stockActual'] as num?)?.toInt() ?? 0) > 0)
+        .toList();
 
     setState(() {
       _resultados = docs;
@@ -103,18 +86,15 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   }
 
   Future<void> _seleccionarProducto(Map<String, dynamic> data) async {
-    // obtenerCombinacionesRecepcion ya filtra cantidadActual > 0
     final combinaciones = await DataMaster()
         .obtenerCombinacionesRecepcion(data['id'] as String);
 
     setState(() {
       _productoSeleccionado = data;
       _combinaciones = combinaciones;
-      _combinacionSeleccionada = null;
       _companeroController.clear();
       _loteController.clear();
-      _cantidadEstimadaController.clear();
-      _cantidadEntregadaController.clear();
+      _cantidadController.clear();
       _error = '';
     });
   }
@@ -127,48 +107,41 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   Future<void> _confirmar() async {
     final companero = _companeroController.text.trim();
     final lote = _loteController.text.trim();
-    final cantidadEstimada =
-        int.tryParse(_cantidadEstimadaController.text.trim());
-    final cantidadEntregada =
-        int.tryParse(_cantidadEntregadaController.text.trim());
+    final cantidad = int.tryParse(_cantidadController.text.trim());
 
-    if (companero.isEmpty) {
-      setState(() => _error = 'Ingresa el nombre del que retira');
-      return;
-    }
     if (lote.isEmpty) {
       setState(() => _error = 'Ingresa el número de lote');
       return;
     }
-    if (_combinacionSeleccionada == null) {
-      setState(() => _error = 'Selecciona un grupo de destinos');
-      return;
-    }
-    if (cantidadEstimada == null || cantidadEstimada <= 0) {
-      setState(() => _error = 'Ingresa la cantidad estimada');
-      return;
-    }
-    if (cantidadEntregada == null || cantidadEntregada <= 0) {
-      setState(() => _error = 'Ingresa la cantidad entregada');
+    if (cantidad == null || cantidad <= 0) {
+      setState(() => _error = 'Ingresa la cantidad a retirar');
       return;
     }
 
     final data = _productoSeleccionado!;
     final stockDisponible = (data['stockActual'] as num?)?.toInt() ?? 0;
 
-    if (cantidadEntregada > stockDisponible) {
-      setState(() =>
-          _error = 'Stock insuficiente. Stock disponible: $stockDisponible');
+    if (cantidad > stockDisponible) {
+      setState(
+          () => _error = 'Stock insuficiente. Disponible: $stockDisponible');
       return;
     }
 
+    if (_combinaciones.isEmpty) {
+      setState(() => _error = 'Este producto no tiene recepciones registradas');
+      return;
+    }
+
+    // Tomar la primera combinación disponible automáticamente
+    final combinacion = _combinaciones.first;
     final destinosIds =
-        List<String>.from(_combinacionSeleccionada!['destinosIds'] as List);
+        List<String>.from(combinacion['destinosIds'] as List);
     final destinoId = destinosIds.first;
     final destinoNombre = _nombresCombinacion(destinosIds);
-    final codigoRecepcion = _combinacionSeleccionada!['prefijo'] as String? ?? '';
+    final codigoRecepcion =
+        combinacion['prefijo'] as String? ?? '';
     final recepcionIds = List<String>.from(
-        _combinacionSeleccionada!['recepcionIds'] as List? ?? []);
+        combinacion['recepcionIds'] as List? ?? []);
 
     setState(() {
       _guardando = true;
@@ -176,8 +149,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     });
 
     try {
-      final hayPendiente = cantidadEntregada > cantidadEstimada;
-
       final ok = await DataMaster().registrarRetiro(
         productoId: data['id']?.toString() ?? '',
         productoNombre: data['nombre'] ?? '',
@@ -187,9 +158,9 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         lote: lote,
         destino: destinoNombre,
         destinoId: destinoId,
-        cantidadEstimada: cantidadEstimada,
-        cantidadEntregada: cantidadEntregada,
-		recepcionIds: recepcionIds,
+        cantidadEstimada: cantidad,
+        cantidadEntregada: cantidad,
+        recepcionIds: recepcionIds,
         codigoRecepcion: codigoRecepcion,
       );
 
@@ -201,12 +172,8 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              hayPendiente
-                  ? 'Retiro registrado — quedó pendiente de devolución'
-                  : 'Retiro registrado correctamente',
-            ),
+          const SnackBar(
+            content: Text('Retiro registrado correctamente'),
             backgroundColor: AppColors.primary,
           ),
         );
@@ -256,10 +223,10 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         ),
         const SizedBox(height: 16),
         TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
+          style: const TextStyle(color: Color(0xFF0c6246)),
           controller: _nombreController,
           decoration: InputDecoration(
-            hintText: 'Buscar por nombre',
+            hintText: 'Buscar por nombre o código',
             prefixIcon: const Icon(Icons.search, color: AppColors.primary),
             filled: true,
             fillColor: Colors.white,
@@ -273,21 +240,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                   const BorderSide(color: AppColors.primary, width: 2),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildChip('Etiquetas', _etiquetas,
-                (v) => setState(() => _etiquetas = v)),
-            _buildChip('Prospectos', _prospectos,
-                (v) => setState(() => _prospectos = v)),
-            _buildChip(
-                'Español', _espanol, (v) => setState(() => _espanol = v)),
-            _buildChip(
-                'Inglés', _ingles, (v) => setState(() => _ingles = v)),
-          ],
         ),
         const SizedBox(height: 16),
         SizedBox(
@@ -314,7 +266,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         if (_buscado && _resultados.isEmpty)
           const Center(
             child: Text(
-              'No se encontraron productos',
+              'No se encontraron productos con stock',
               style: TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w600,
@@ -323,6 +275,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           ),
         ..._resultados.map((data) {
           final stock = (data['stockActual'] as num?)?.toInt() ?? 0;
+          final codigo = data['codigo']?.toString() ?? '';
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             child: InkWell(
@@ -354,10 +307,9 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              _buildTag(data['tipo'] ?? ''),
-                              const SizedBox(width: 8),
-                              _buildTag(data['idioma'] ?? ''),
-                              const SizedBox(width: 8),
+                              if (codigo.isNotEmpty)
+                                _buildTag('Cód: $codigo'),
+                              if (codigo.isNotEmpty) const SizedBox(width: 8),
                               _buildTag(
                                 'Stock: $stock',
                                 color: stock < 1000
@@ -386,13 +338,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
 
   Widget _buildFormulario() {
     final data = _productoSeleccionado!;
-    final estimadaPreview =
-        int.tryParse(_cantidadEstimadaController.text.trim());
-    final entregadaPreview =
-        int.tryParse(_cantidadEntregadaController.text.trim());
-    final quedaPendiente = estimadaPreview != null &&
-        entregadaPreview != null &&
-        entregadaPreview > estimadaPreview;
+    final codigo = data['codigo']?.toString() ?? '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,10 +376,9 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        _buildTagBlanco(data['tipo'] ?? ''),
-                        const SizedBox(width: 8),
-                        _buildTagBlanco(data['idioma'] ?? ''),
-                        const SizedBox(width: 8),
+                        if (codigo.isNotEmpty)
+                          _buildTagBlanco('Cód: $codigo'),
+                        if (codigo.isNotEmpty) const SizedBox(width: 8),
                         _buildTagBlanco(
                             'Stock: ${(data['stockActual'] as num?)?.toInt() ?? 0}'),
                       ],
@@ -446,7 +391,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 onPressed: () => setState(() {
                   _productoSeleccionado = null;
                   _combinaciones = [];
-                  _combinacionSeleccionada = null;
                 }),
               ),
             ],
@@ -454,11 +398,11 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         ),
         const SizedBox(height: 24),
 
-        _buildLabel('COMPAÑERO'),
+        _buildLabel('COMPAÑERO (opcional)'),
         const SizedBox(height: 8),
         _buildTextField(
           controller: _companeroController,
-          hint: 'Nombre del compañero',
+          hint: 'Nombre del que retira',
           capitalization: TextCapitalization.sentences,
         ),
         const SizedBox(height: 20),
@@ -472,148 +416,13 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         ),
         const SizedBox(height: 20),
 
-        // Selector de combinación de destinos
-        _buildLabel('GRUPO DE DESTINOS'),
-        const SizedBox(height: 4),
-        const Text(
-          'Selecciona el grupo al que pertenece este retiro',
-          style: TextStyle(color: AppColors.primary, fontSize: 11),
-        ),
-        const SizedBox(height: 12),
-        if (_combinaciones.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.red.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red),
-            ),
-            child: const Text(
-              'Este producto no tiene recepciones registradas.',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
-            ),
-          )
-        else
-          Column(
-            children: _combinaciones.map((combinacion) {
-              final ids =
-                  List<String>.from(combinacion['destinosIds'] as List);
-              final clave = combinacion['clave'] as String;
-              final seleccionado =
-                  _combinacionSeleccionada?['clave'] == clave;
-
-              // cantidadActual viene directo de las recepciones
-              final stockDisponible =
-                  (combinacion['cantidadActual'] as num?)?.toInt() ?? 0;
-              final prefijo = combinacion['prefijo'] as String? ?? '';
-
-              return GestureDetector(
-                onTap: () =>
-                    setState(() => _combinacionSeleccionada = combinacion),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: seleccionado ? AppColors.primary : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: seleccionado
-                          ? AppColors.primary
-                          : AppColors.primary.withValues(alpha: 0.3),
-                      width: seleccionado ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _nombresCombinacion(ids),
-                              style: TextStyle(
-                                color: seleccionado
-                                    ? Colors.white
-                                    : AppColors.primary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(                        
-                              'Cód. $prefijo · Disponibles: $stockDisponible',
-                              style: TextStyle(
-                                color: seleccionado
-                                    ? Colors.white70
-                                    : Colors.grey[600],
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (seleccionado)
-                        const Icon(Icons.check_circle,
-                            color: Colors.white, size: 20),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        const SizedBox(height: 20),
-
-        _buildLabel('CANTIDAD DEL PRODUCTO'),
+        _buildLabel('CANTIDAD A RETIRAR'),
         const SizedBox(height: 8),
         _buildTextField(
-          controller: _cantidadEstimadaController,
-          hint: '',
+          controller: _cantidadController,
+          hint: 'Ej: 1000',
           teclado: TextInputType.number,
-          onChanged: (_) => setState(() {}),
         ),
-        const SizedBox(height: 20),
-
-        _buildLabel('CANTIDAD ENTREGADA'),
-        const SizedBox(height: 8),
-        _buildTextField(
-          controller: _cantidadEntregadaController,
-          hint: '',
-          teclado: TextInputType.number,
-          onChanged: (_) => setState(() {}),
-        ),
-
-        if (quedaPendiente) ...[
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.pending_actions,
-                    color: Colors.orange, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Quedarán ${entregadaPreview! - estimadaPreview!} unidades pendientes de devolución',
-                    style: const TextStyle(
-                      color: Colors.orange,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-
         const SizedBox(height: 32),
 
         if (_error.isNotEmpty)
@@ -672,7 +481,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     required TextEditingController controller,
     required String hint,
     TextInputType teclado = TextInputType.text,
-    TextCapitalization capitalization = TextCapitalization.sentences,
+    TextCapitalization capitalization = TextCapitalization.none,
     ValueChanged<String>? onChanged,
   }) {
     return TextField(
@@ -691,32 +500,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppColors.primary, width: 2),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChip(
-      String label, bool seleccionado, Function(bool) onTap) {
-    return GestureDetector(
-      onTap: () => onTap(!seleccionado),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: seleccionado ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primary),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: seleccionado ? Colors.white : AppColors.primary,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
       ),
     );
