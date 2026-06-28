@@ -1,4 +1,4 @@
-package com.jplabs.etiquetas
+package com.jplabs.cajas
 
 import io.flutter.embedding.android.FlutterActivity
 
