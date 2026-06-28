@@ -82,8 +82,10 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
 
       await DataMaster().cerrarRetiro(
         retiroId: retiroId,
+        productoId: data['productoId']?.toString() ?? '',
+        destinoId: data['destinoId']?.toString() ?? '',
         cantidadDevuelta: nuevosPerdidos,
-        motivoCierre: data['motivoCierre']?.toString(),
+        motivoCierre: 'Pérdida en calibración',
       );
 
       setState(() {
