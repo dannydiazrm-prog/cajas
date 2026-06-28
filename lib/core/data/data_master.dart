@@ -1465,7 +1465,7 @@ combinaciones[clave] = {
     await FirebaseFirestore.instance
         .collection('config')
         .doc('prefijos')
-        .set({'usados': usados});
+        .set({'usados': usados}, SetOptions(merge: true));
   }
 
   // ─────────────────────────────────────────
