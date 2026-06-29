@@ -19,8 +19,6 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
   String? _expandidoId;
 
   final _cantidadController = TextEditingController();
-  List<Map<String, dynamic>> _destinos = [];
-  Map<String, bool> _destinosSeleccionados = {};
   bool _guardando = false;
 
   @override
@@ -37,13 +35,15 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
       _expandidoId = null;
     });
 
-    final nombre = _nombreController.text.trim().toLowerCase();
     List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
 
+    final nombre = _nombreController.text.trim().toLowerCase();
     if (nombre.isNotEmpty) {
       docs = docs.where((d) {
-        final matchNombre = (d['nombre'] ?? '').toString().toLowerCase().contains(nombre);
-        final matchCodigo = (d['codigo'] ?? '').toString().toLowerCase().contains(nombre);
+        final matchNombre =
+            (d['nombre'] ?? '').toString().toLowerCase().contains(nombre);
+        final matchCodigo =
+            (d['codigo'] ?? '').toString().toLowerCase().contains(nombre);
         return matchNombre || matchCodigo;
       }).toList();
     }
@@ -55,35 +55,13 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
     });
   }
 
-  Future<void> _cargarDestinos() async {
-    final destinos = await DataMaster().obtenerDestinos();
-    setState(() {
-      _destinos = destinos
-          .map((d) => {
-                'id': d['id']?.toString() ?? '',
-                'nombre': d['nombre']?.toString() ?? '',
-              })
-          .toList();
-      _destinosSeleccionados = {
-        for (var d in _destinos) d['id'] as String: false,
-      };
-    });
-  }
-
   Future<void> _expandir(String id) async {
     if (_expandidoId == id) {
       setState(() => _expandidoId = null);
       return;
     }
     _cantidadController.clear();
-    await _cargarDestinos();
-
-    setState(() {
-      _expandidoId = id;
-      for (var d in _destinos) {
-        _destinosSeleccionados[d['id'] as String] = false;
-      }
-    });
+    setState(() => _expandidoId = id);
   }
 
   Future<void> _confirmar(Map<String, dynamic> data) async {
@@ -99,27 +77,11 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
       return;
     }
 
-    final destinosHabilitados = _destinosSeleccionados.entries
-        .where((e) => e.value)
-        .map((e) => e.key)
-        .toList();
-
-    if (destinosHabilitados.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecciona al menos un destino'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     setState(() => _guardando = true);
 
     try {
       final productoId = data['id']?.toString() ?? '';
       final codigo = data['codigo']?.toString() ?? '';
-      final destinoClave = destinosHabilitados.first;
 
       await DataMaster().registrarRecepcion(
         productoId: productoId,
@@ -128,8 +90,8 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
         idioma: data['idioma'] ?? '',
         cantidad: cantidad,
         codigo: codigo,
-        destinoClave: destinoClave,
-        destinos: destinosHabilitados,
+        destinoClave: 'general',
+        destinos: ['general'],
       );
 
       setState(() {
@@ -314,79 +276,6 @@ class _RecibirProductoScreenState extends State<RecibirProductoScreen> {
                         borderSide: const BorderSide(
                             color: AppColors.primary, width: 2),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'DESTINOS HABILITADOS',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.primary),
-                    ),
-                    child: ExpansionTile(
-                      title: Text(
-                        _destinosSeleccionados.entries.any((e) => e.value)
-                            ? _destinos
-                                .where((d) =>
-                                    _destinosSeleccionados[
-                                            d['id'] as String] ==
-                                        true)
-                                .map((d) => d['nombre'] as String)
-                                .join(', ')
-                            : 'Selecciona los destinos',
-                        style: TextStyle(
-                          color: _destinosSeleccionados.entries
-                                  .any((e) => e.value)
-                              ? AppColors.primary
-                              : Colors.grey[500],
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      iconColor: AppColors.primary,
-                      collapsedIconColor: AppColors.primary,
-                      children: _destinos.map((d) {
-                        final dId = d['id'] as String;
-                        final nombre = d['nombre'] as String;
-                        final activo =
-                            _destinosSeleccionados[dId] ?? false;
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: activo
-                                ? AppColors.primary.withValues(alpha: 0.05)
-                                : Colors.white,
-                            border: Border(
-                              top: BorderSide(
-                                  color: Colors.grey.shade200),
-                            ),
-                          ),
-                          child: SwitchListTile(
-                            value: activo,
-                            activeColor: AppColors.primary,
-                            title: Text(
-                              nombre,
-                              style: TextStyle(
-                                color: activo
-                                    ? AppColors.primary
-                                    : Colors.grey[600],
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            onChanged: (v) => setState(
-                                () => _destinosSeleccionados[dId] = v),
-                          ),
-                        );
-                      }).toList(),
                     ),
                   ),
                   const SizedBox(height: 16),

@@ -19,8 +19,6 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
   String? _expandidoId;
 
   final _cantidadController = TextEditingController();
-  List<Map<String, dynamic>> _destinos = [];
-  Map<String, bool> _destinosSeleccionados = {};
   bool _guardando = false;
 
   @override
@@ -57,35 +55,13 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
     });
   }
 
-  Future<void> _cargarDestinos() async {
-    final destinos = await DataMaster().obtenerDestinos();
-    setState(() {
-      _destinos = destinos
-          .map((d) => {
-                'id': d['id']?.toString() ?? '',
-                'nombre': d['nombre']?.toString() ?? '',
-              })
-          .toList();
-      _destinosSeleccionados = {
-        for (var d in _destinos) d['id'] as String: false,
-      };
-    });
-  }
-
   Future<void> _expandir(String id) async {
     if (_expandidoId == id) {
       setState(() => _expandidoId = null);
       return;
     }
     _cantidadController.clear();
-    await _cargarDestinos();
-
-    setState(() {
-      _expandidoId = id;
-      for (var d in _destinos) {
-        _destinosSeleccionados[d['id'] as String] = false;
-      }
-    });
+    setState(() => _expandidoId = id);
   }
 
   Future<void> _confirmar(Map<String, dynamic> data) async {
@@ -112,36 +88,18 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
       return;
     }
 
-    final destinosHabilitados = _destinosSeleccionados.entries
-        .where((e) => e.value)
-        .map((e) => e.key)
-        .toList();
-
-    if (destinosHabilitados.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecciona al menos un destino'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     setState(() => _guardando = true);
 
     try {
-      final productoId = data['id']?.toString() ?? '';
-      final String destinoClave = destinosHabilitados.first;
-
       await DataMaster().registrarCargaInicial(
-        productoId: productoId,
+        productoId: data['id']?.toString() ?? '',
         productoNombre: data['nombre'] ?? '',
         tipo: data['tipo'] ?? '',
         idioma: data['idioma'] ?? '',
         cantidad: cantidad,
         codigo: codigo,
-        destinoClave: destinoClave,
-        destinos: destinosHabilitados,
+        destinoClave: 'general',
+        destinos: ['general'],
       );
 
       setState(() {
@@ -282,7 +240,8 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
           controller: _nombreController,
           decoration: InputDecoration(
             hintText: 'Buscar por nombre o código',
-            prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+            prefixIcon:
+                const Icon(Icons.search, color: AppColors.primary),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
@@ -343,7 +302,8 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
                           children: [
                             if (codigo.isNotEmpty)
                               _buildTag('Cód: $codigo'),
-                            if (codigo.isNotEmpty) const SizedBox(width: 8),
+                            if (codigo.isNotEmpty)
+                              const SizedBox(width: 8),
                             _buildTag(
                                 'Stock: ${(data['stockActual'] as num?)?.toInt() ?? 0}'),
                           ],
@@ -394,79 +354,6 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
                         borderSide: const BorderSide(
                             color: AppColors.primary, width: 2),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'DESTINOS HABILITADOS',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.primary),
-                    ),
-                    child: ExpansionTile(
-                      title: Text(
-                        _destinosSeleccionados.entries.any((e) => e.value)
-                            ? _destinos
-                                .where((d) =>
-                                    _destinosSeleccionados[
-                                            d['id'] as String] ==
-                                        true)
-                                .map((d) => d['nombre'] as String)
-                                .join(', ')
-                            : 'Selecciona los destinos',
-                        style: TextStyle(
-                          color: _destinosSeleccionados.entries
-                                  .any((e) => e.value)
-                              ? AppColors.primary
-                              : Colors.grey[500],
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      iconColor: AppColors.primary,
-                      collapsedIconColor: AppColors.primary,
-                      children: _destinos.map((d) {
-                        final dId = d['id'] as String;
-                        final nombre = d['nombre'] as String;
-                        final activo =
-                            _destinosSeleccionados[dId] ?? false;
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: activo
-                                ? AppColors.primary.withValues(alpha: 0.05)
-                                : Colors.white,
-                            border: Border(
-                              top: BorderSide(
-                                  color: Colors.grey.shade200),
-                            ),
-                          ),
-                          child: SwitchListTile(
-                            value: activo,
-                            activeColor: AppColors.primary,
-                            title: Text(
-                              nombre,
-                              style: TextStyle(
-                                color: activo
-                                    ? AppColors.primary
-                                    : Colors.grey[600],
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            onChanged: (v) => setState(
-                                () => _destinosSeleccionados[dId] = v),
-                          ),
-                        );
-                      }).toList(),
                     ),
                   ),
                   const SizedBox(height: 16),

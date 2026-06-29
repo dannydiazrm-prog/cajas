@@ -12,39 +12,17 @@ class NuevoRetiroScreen extends StatefulWidget {
 }
 
 class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
-  // Paso 1: Búsqueda
   final _nombreController = TextEditingController();
   List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
   bool _buscado = false;
 
-  // Paso 2: Formulario
   Map<String, dynamic>? _productoSeleccionado;
   final _companeroController = TextEditingController();
   final _loteController = TextEditingController();
   final _cantidadController = TextEditingController();
-
-  List<Map<String, dynamic>> _combinaciones = [];
-  Map<String, dynamic>? _combinacionSeleccionada;
-  Map<String, String> _nombresDestinos = {};
-
   bool _guardando = false;
   String _error = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _cargarNombresDestinos();
-  }
-
-  Future<void> _cargarNombresDestinos() async {
-    final destinos = await DataMaster().obtenerDestinos();
-    setState(() {
-      _nombresDestinos = {
-        for (final d in destinos) d['id'].toString(): d['nombre'].toString(),
-      };
-    });
-  }
 
   @override
   void dispose() {
@@ -87,23 +65,13 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   }
 
   Future<void> _seleccionarProducto(Map<String, dynamic> data) async {
-    final combinaciones = await DataMaster()
-        .obtenerCombinacionesRecepcion(data['id'] as String);
-
     setState(() {
       _productoSeleccionado = data;
-      _combinaciones = combinaciones;
-      _combinacionSeleccionada = null;
       _companeroController.clear();
       _loteController.clear();
       _cantidadController.clear();
       _error = '';
     });
-  }
-
-  String _nombresCombinacion(List<String> ids) {
-    final nombres = ids.map((id) => _nombresDestinos[id] ?? id).toList();
-    return nombres.join(' · ');
   }
 
   Future<void> _confirmar() async {
@@ -115,33 +83,19 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
       setState(() => _error = 'Ingresa el número de lote');
       return;
     }
-    if (_combinacionSeleccionada == null) {
-      setState(() => _error = 'Seleccioná un destino');
-      return;
-    }
     if (cantidad == null || cantidad <= 0) {
       setState(() => _error = 'Ingresa la cantidad a retirar');
       return;
     }
 
     final data = _productoSeleccionado!;
-    final disponible =
-        (_combinacionSeleccionada!['cantidadActual'] as num?)?.toInt() ?? 0;
+    final stockDisponible = (data['stockActual'] as num?)?.toInt() ?? 0;
 
-    if (cantidad > disponible) {
+    if (cantidad > stockDisponible) {
       setState(() =>
-          _error = 'Stock insuficiente en este destino. Disponible: $disponible');
+          _error = 'Stock insuficiente. Disponible: $stockDisponible');
       return;
     }
-
-    final destinosIds =
-        List<String>.from(_combinacionSeleccionada!['destinosIds'] as List);
-    final destinoId = destinosIds.first;
-    final destinoNombre = _nombresCombinacion(destinosIds);
-    final codigoRecepcion =
-        _combinacionSeleccionada!['prefijo'] as String? ?? '';
-    final recepcionIds = List<String>.from(
-        _combinacionSeleccionada!['recepcionIds'] as List? ?? []);
 
     setState(() {
       _guardando = true;
@@ -149,6 +103,14 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     });
 
     try {
+      final combinaciones = await DataMaster()
+          .obtenerCombinacionesRecepcion(data['id'].toString());
+
+      final recepcionIds = combinaciones
+          .expand(
+              (c) => List<String>.from(c['recepcionIds'] as List? ?? []))
+          .toList();
+
       final ok = await DataMaster().registrarRetiro(
         productoId: data['id']?.toString() ?? '',
         productoNombre: data['nombre'] ?? '',
@@ -156,12 +118,12 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         idioma: data['idioma'] ?? '',
         companero: companero,
         lote: lote,
-        destino: destinoNombre,
-        destinoId: destinoId,
+        destino: 'general',
+        destinoId: 'general',
         cantidadEstimada: cantidad,
         cantidadEntregada: cantidad,
         recepcionIds: recepcionIds,
-        codigoRecepcion: codigoRecepcion,
+        codigoRecepcion: data['codigo']?.toString() ?? '',
       );
 
       if (!ok) {
@@ -309,7 +271,8 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                             children: [
                               if (codigo.isNotEmpty)
                                 _buildTag('Cód: $codigo'),
-                              if (codigo.isNotEmpty) const SizedBox(width: 8),
+                              if (codigo.isNotEmpty)
+                                const SizedBox(width: 8),
                               _buildTag(
                                 'Stock: $stock',
                                 color: stock < 1000
@@ -389,8 +352,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: () => setState(() {
                   _productoSeleccionado = null;
-                  _combinaciones = [];
-                  _combinacionSeleccionada = null;
                 }),
               ),
             ],
@@ -414,97 +375,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           hint: '',
           capitalization: TextCapitalization.sentences,
         ),
-        const SizedBox(height: 20),
-
-        _buildLabel('DESTINO'),
-        const SizedBox(height: 4),
-        const Text(
-          'Seleccioná el destino del que querés retirar',
-          style: TextStyle(color: AppColors.primary, fontSize: 11),
-        ),
-        const SizedBox(height: 12),
-        if (_combinaciones.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.red.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red),
-            ),
-            child: const Text(
-              'Este producto no tiene recepciones registradas.',
-              style:
-                  TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
-            ),
-          )
-        else
-          Column(
-            children: _combinaciones.map((combinacion) {
-              final ids =
-                  List<String>.from(combinacion['destinosIds'] as List);
-              final clave = combinacion['clave'] as String;
-              final seleccionado =
-                  _combinacionSeleccionada?['clave'] == clave;
-              final stockDisponible =
-                  (combinacion['cantidadActual'] as num?)?.toInt() ?? 0;
-              final prefijo = combinacion['prefijo'] as String? ?? '';
-
-              return GestureDetector(
-                onTap: () =>
-                    setState(() => _combinacionSeleccionada = combinacion),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: seleccionado ? AppColors.primary : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: seleccionado
-                          ? AppColors.primary
-                          : AppColors.primary.withValues(alpha: 0.3),
-                      width: seleccionado ? 2 : 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _nombresCombinacion(ids),
-                              style: TextStyle(
-                                color: seleccionado
-                                    ? Colors.white
-                                    : AppColors.primary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Cód. $prefijo · Disponibles: $stockDisponible',
-                              style: TextStyle(
-                                color: seleccionado
-                                    ? Colors.white70
-                                    : Colors.grey[600],
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (seleccionado)
-                        const Icon(Icons.check_circle,
-                            color: Colors.white, size: 20),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
         const SizedBox(height: 20),
 
         _buildLabel('CANTIDAD A RETIRAR'),
@@ -573,14 +443,12 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     required String hint,
     TextInputType teclado = TextInputType.text,
     TextCapitalization capitalization = TextCapitalization.none,
-    ValueChanged<String>? onChanged,
   }) {
     return TextField(
       style: const TextStyle(color: Color(0xFF0c6246)),
       controller: controller,
       keyboardType: teclado,
       textCapitalization: capitalization,
-      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hint,
         filled: true,
@@ -591,7 +459,8 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide:
+              const BorderSide(color: AppColors.primary, width: 2),
         ),
       ),
     );
