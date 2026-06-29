@@ -21,16 +21,43 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
   bool _buscado = false;
   bool _generando = false;
 
-  // Panel de perdidos
+  List<Map<String, dynamic>> _retirosHoy = [];
+  bool _cargandoHoy = true;
+
   String? _expandidoId;
   final _perdidosController = TextEditingController();
   bool _guardandoPerdidos = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarRetirosHoy();
+  }
 
   @override
   void dispose() {
     _loteController.dispose();
     _perdidosController.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarRetirosHoy() async {
+    setState(() => _cargandoHoy = true);
+    final ahora = DateTime.now();
+    final inicioDia = DateTime(ahora.year, ahora.month, ahora.day);
+    final finDia = inicioDia.add(const Duration(days: 1));
+
+    final docs = await DataMaster().obtenerRetiros(
+      desde: inicioDia,
+      hasta: finDia,
+    );
+
+    if (mounted) {
+      setState(() {
+        _retirosHoy = docs;
+        _cargandoHoy = false;
+      });
+    }
   }
 
   Future<void> _buscar() async {
@@ -77,7 +104,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
 
     try {
       final retiroId = data['id']?.toString() ?? '';
-      final perdidosActuales = (data['cantidadDevuelta'] as num?)?.toInt() ?? 0;
+      final perdidosActuales =
+          (data['cantidadDevuelta'] as num?)?.toInt() ?? 0;
       final nuevosPerdidos = perdidosActuales + cantidad;
 
       await DataMaster().cerrarRetiro(
@@ -94,7 +122,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
         _guardandoPerdidos = false;
       });
 
-      await _buscar();
+      await _cargarRetirosHoy();
+      if (_buscado) await _buscar();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -320,7 +349,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                       children: [
                         Expanded(
                           child: TextField(
-                            style: const TextStyle(color: Color(0xFF0c6246)),
+                            style:
+                                const TextStyle(color: Color(0xFF0c6246)),
                             controller: _loteController,
                             textCapitalization: TextCapitalization.sentences,
                             decoration: InputDecoration(
@@ -333,8 +363,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                               fillColor: Colors.white,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide:
-                                    const BorderSide(color: AppColors.primary),
+                                borderSide: const BorderSide(
+                                    color: AppColors.primary),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -361,8 +391,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                                   )
                                 : const Text(
                                     'BUSCAR',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w700),
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700),
                                   ),
                           ),
                         ),
@@ -415,9 +445,49 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        ..._resultados.map((data) => _buildRetiroItem(data)),
+                        ..._resultados
+                            .map((data) => _buildRetiroItem(data)),
                       ],
                     ],
+                    const SizedBox(height: 32),
+                    const Text(
+                      'RETIROS DE HOY',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_cargandoHoy)
+                      const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary),
+                      )
+                    else if (_retirosHoy.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: const Text(
+                          'No hay retiros registrados hoy',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      ..._retirosHoy
+                          .map((data) => _buildRetiroItem(data)),
                   ],
                 ),
               ),
@@ -482,7 +552,11 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                           spacing: 8,
                           runSpacing: 4,
                           children: [
-                            if ((data['companero'] ?? '').toString().isNotEmpty)
+                            if ((data['lote'] ?? '').toString().isNotEmpty)
+                              _buildTag('Lote: ${data['lote']}'),
+                            if ((data['companero'] ?? '')
+                                .toString()
+                                .isNotEmpty)
                               _buildTag('👤 ${data['companero']}'),
                             _buildTag('📤 Retirado: $retirado'),
                             if (perdidos > 0)
@@ -534,7 +608,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                         Expanded(
                           child: Text(
                             perdidos > 0
-                                ? 'Ya hay $perdidos cajas perdidas registradas en este retiro. Podés agregar más.'
+                                ? 'Ya hay $perdidos cajas perdidas registradas. Podés agregar más.'
                                 : 'Registrá las cajas dañadas en calibración. Se descontarán del stock.',
                             style: const TextStyle(
                               color: Colors.orange,
@@ -641,11 +715,12 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
                     'MOVIMIENTOS', _resultados.length.toString()),
               ),
               Expanded(
-                child:
-                    _buildResumenItem('RETIRADO', totalEntregado.toString()),
+                child: _buildResumenItem(
+                    'RETIRADO', totalEntregado.toString()),
               ),
               Expanded(
-                child: _buildResumenItem('PERDIDOS', totalPerdidos.toString()),
+                child: _buildResumenItem(
+                    'PERDIDOS', totalPerdidos.toString()),
               ),
             ],
           ),

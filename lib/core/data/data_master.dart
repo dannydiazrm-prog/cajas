@@ -1115,6 +1115,7 @@ combinaciones[clave] = {
         'nombre': row['nombre'],
         'tipo': row['tipo'],
         'idioma': row['idioma'],
+        'codigo': row['codigo'] ?? '',
         'stockActual': row['stockActual'],
         'stockPorDestino': jsonDecode(row['stockPorDestino'] as String),
         'destinos': jsonDecode(row['destinos'] as String),

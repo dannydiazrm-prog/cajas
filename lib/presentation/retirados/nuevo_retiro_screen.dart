@@ -25,6 +25,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   final _cantidadController = TextEditingController();
 
   List<Map<String, dynamic>> _combinaciones = [];
+  Map<String, dynamic>? _combinacionSeleccionada;
   Map<String, String> _nombresDestinos = {};
 
   bool _guardando = false;
@@ -92,6 +93,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     setState(() {
       _productoSeleccionado = data;
       _combinaciones = combinaciones;
+      _combinacionSeleccionada = null;
       _companeroController.clear();
       _loteController.clear();
       _cantidadController.clear();
@@ -113,35 +115,33 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
       setState(() => _error = 'Ingresa el número de lote');
       return;
     }
+    if (_combinacionSeleccionada == null) {
+      setState(() => _error = 'Seleccioná un destino');
+      return;
+    }
     if (cantidad == null || cantidad <= 0) {
       setState(() => _error = 'Ingresa la cantidad a retirar');
       return;
     }
 
     final data = _productoSeleccionado!;
-    final stockDisponible = (data['stockActual'] as num?)?.toInt() ?? 0;
+    final disponible =
+        (_combinacionSeleccionada!['cantidadActual'] as num?)?.toInt() ?? 0;
 
-    if (cantidad > stockDisponible) {
-      setState(
-          () => _error = 'Stock insuficiente. Disponible: $stockDisponible');
+    if (cantidad > disponible) {
+      setState(() =>
+          _error = 'Stock insuficiente en este destino. Disponible: $disponible');
       return;
     }
 
-    if (_combinaciones.isEmpty) {
-      setState(() => _error = 'Este producto no tiene recepciones registradas');
-      return;
-    }
-
-    // Tomar la primera combinación disponible automáticamente
-    final combinacion = _combinaciones.first;
     final destinosIds =
-        List<String>.from(combinacion['destinosIds'] as List);
+        List<String>.from(_combinacionSeleccionada!['destinosIds'] as List);
     final destinoId = destinosIds.first;
     final destinoNombre = _nombresCombinacion(destinosIds);
     final codigoRecepcion =
-        combinacion['prefijo'] as String? ?? '';
+        _combinacionSeleccionada!['prefijo'] as String? ?? '';
     final recepcionIds = List<String>.from(
-        combinacion['recepcionIds'] as List? ?? []);
+        _combinacionSeleccionada!['recepcionIds'] as List? ?? []);
 
     setState(() {
       _guardando = true;
@@ -343,7 +343,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Producto seleccionado
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -391,6 +390,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 onPressed: () => setState(() {
                   _productoSeleccionado = null;
                   _combinaciones = [];
+                  _combinacionSeleccionada = null;
                 }),
               ),
             ],
@@ -414,6 +414,97 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           hint: '',
           capitalization: TextCapitalization.sentences,
         ),
+        const SizedBox(height: 20),
+
+        _buildLabel('DESTINO'),
+        const SizedBox(height: 4),
+        const Text(
+          'Seleccioná el destino del que querés retirar',
+          style: TextStyle(color: AppColors.primary, fontSize: 11),
+        ),
+        const SizedBox(height: 12),
+        if (_combinaciones.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red),
+            ),
+            child: const Text(
+              'Este producto no tiene recepciones registradas.',
+              style:
+                  TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+            ),
+          )
+        else
+          Column(
+            children: _combinaciones.map((combinacion) {
+              final ids =
+                  List<String>.from(combinacion['destinosIds'] as List);
+              final clave = combinacion['clave'] as String;
+              final seleccionado =
+                  _combinacionSeleccionada?['clave'] == clave;
+              final stockDisponible =
+                  (combinacion['cantidadActual'] as num?)?.toInt() ?? 0;
+              final prefijo = combinacion['prefijo'] as String? ?? '';
+
+              return GestureDetector(
+                onTap: () =>
+                    setState(() => _combinacionSeleccionada = combinacion),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: seleccionado ? AppColors.primary : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: seleccionado
+                          ? AppColors.primary
+                          : AppColors.primary.withValues(alpha: 0.3),
+                      width: seleccionado ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _nombresCombinacion(ids),
+                              style: TextStyle(
+                                color: seleccionado
+                                    ? Colors.white
+                                    : AppColors.primary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Cód. $prefijo · Disponibles: $stockDisponible',
+                              style: TextStyle(
+                                color: seleccionado
+                                    ? Colors.white70
+                                    : Colors.grey[600],
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (seleccionado)
+                        const Icon(Icons.check_circle,
+                            color: Colors.white, size: 20),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         const SizedBox(height: 20),
 
         _buildLabel('CANTIDAD A RETIRAR'),
