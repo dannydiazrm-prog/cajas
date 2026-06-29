@@ -18,6 +18,9 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
   bool _buscado = false;
 
   Map<String, dynamic>? _productoSeleccionado;
+  List<Map<String, dynamic>> _combinaciones = [];
+  Map<String, dynamic>? _combinacionSeleccionada;
+  Map<String, String> _nombresDestinos = {};
 
   final _companeroController = TextEditingController();
   final _cantidadController = TextEditingController();
@@ -34,6 +37,21 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _cargarNombresDestinos();
+  }
+
+  Future<void> _cargarNombresDestinos() async {
+    final destinos = await DataMaster().obtenerDestinos();
+    setState(() {
+      _nombresDestinos = {
+        for (final d in destinos) d['id'].toString(): d['nombre'].toString(),
+      };
+    });
+  }
+
+  @override
   void dispose() {
     _nombreController.dispose();
     _companeroController.dispose();
@@ -46,6 +64,8 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
       _buscando = true;
       _buscado = false;
       _productoSeleccionado = null;
+      _combinaciones = [];
+      _combinacionSeleccionada = null;
     });
 
     List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
@@ -72,13 +92,23 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     });
   }
 
-  void _seleccionarProducto(Map<String, dynamic> producto) {
+  Future<void> _seleccionarProducto(Map<String, dynamic> producto) async {
+    final combinaciones = await DataMaster()
+        .obtenerCombinacionesRecepcion(producto['id'].toString());
+
     setState(() {
       _productoSeleccionado = producto;
+      _combinaciones = combinaciones;
+      _combinacionSeleccionada = null;
       _companeroController.clear();
       _cantidadController.clear();
       _motivo = null;
     });
+  }
+
+  String _nombresCombinacion(List<String> ids) {
+    final nombres = ids.map((id) => _nombresDestinos[id] ?? id).toList();
+    return nombres.join(' · ');
   }
 
   Future<void> _guardar() async {
@@ -88,6 +118,10 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
 
     if (producto == null) return;
 
+    if (_combinacionSeleccionada == null) {
+      _mostrarError('Seleccioná un destino');
+      return;
+    }
     if (companero.isEmpty) {
       _mostrarError('Ingresá el nombre del compañero');
       return;
@@ -96,11 +130,11 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
       _mostrarError('Ingresá una cantidad válida');
       return;
     }
-    final stockDisponible =
-        (producto['stockActual'] as num?)?.toInt() ?? 0;
-    if (cantidad > stockDisponible) {
+    final disponible =
+        (_combinacionSeleccionada!['cantidadActual'] as num?)?.toInt() ?? 0;
+    if (cantidad > disponible) {
       _mostrarError(
-          'La cantidad supera el stock disponible ($stockDisponible)');
+          'La cantidad supera el stock disponible en este destino ($disponible)');
       return;
     }
     if (_motivo == null) {
@@ -111,13 +145,8 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     setState(() => _guardando = true);
 
     try {
-      // Obtener todos los recepcionIds del producto
-      final combinaciones = await DataMaster()
-          .obtenerCombinacionesRecepcion(producto['id'].toString());
-
-      final recepcionIds = combinaciones
-          .expand((c) => List<String>.from(c['recepcionIds'] as List? ?? []))
-          .toList();
+      final recepcionIds = List<String>.from(
+          _combinacionSeleccionada!['recepcionIds'] as List? ?? []);
 
       await DataMaster().registrarHojaAjuste(
         productoId: producto['id'].toString(),
@@ -203,8 +232,102 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
                       ..._resultados.map((doc) => _buildProductoItem(doc)),
                     ] else ...[
                       _buildProductoElegido(),
-                      const SizedBox(height: 24),
-                      _buildFormulario(),
+                      const SizedBox(height: 20),
+                      _buildLabel('DESTINO'),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Seleccioná el destino al que pertenece este ajuste',
+                        style:
+                            TextStyle(color: AppColors.primary, fontSize: 11),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_combinaciones.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red),
+                          ),
+                          child: const Text(
+                            'Este producto no tiene recepciones registradas.',
+                            style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        )
+                      else
+                        Column(
+                          children: _combinaciones.map((c) {
+                            final ids = List<String>.from(
+                                c['destinosIds'] as List);
+                            final clave = c['clave'] as String;
+                            final seleccionado =
+                                _combinacionSeleccionada?['clave'] == clave;
+                            final disponible =
+                                (c['cantidadActual'] as num?)?.toInt() ?? 0;
+                            final prefijo = c['prefijo']?.toString() ?? '';
+
+                            return GestureDetector(
+                              onTap: () => setState(
+                                  () => _combinacionSeleccionada = c),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: seleccionado
+                                      ? AppColors.primary.withValues(alpha: 0.08)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: seleccionado
+                                        ? AppColors.primary
+                                        : AppColors.primary
+                                            .withValues(alpha: 0.3),
+                                    width: seleccionado ? 2 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _nombresCombinacion(ids),
+                                            style: const TextStyle(
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Wrap(
+                                            spacing: 8,
+                                            children: [
+                                              _buildTag('Código: $prefijo'),
+                                              _buildTag(
+                                                  'Disponible: $disponible'),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (seleccionado)
+                                      const Icon(Icons.check_circle,
+                                          color: AppColors.primary),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      if (_combinacionSeleccionada != null) ...[
+                        const SizedBox(height: 24),
+                        _buildFormulario(),
+                      ],
                     ],
                   ],
                 ),
@@ -341,6 +464,8 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
           TextButton(
             onPressed: () => setState(() {
               _productoSeleccionado = null;
+              _combinaciones = [];
+              _combinacionSeleccionada = null;
             }),
             child: const Text(
               'Cambiar',
@@ -356,15 +481,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'COMPAÑERO',
-          style: TextStyle(
-            color: AppColors.primary,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.1,
-          ),
-        ),
+        _buildLabel('COMPAÑERO'),
         const SizedBox(height: 8),
         TextField(
           style: const TextStyle(color: Color(0xFF0c6246)),
@@ -373,15 +490,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
           decoration: _inputDecoration('Nombre del compañero'),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'CANTIDAD',
-          style: TextStyle(
-            color: AppColors.primary,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.1,
-          ),
-        ),
+        _buildLabel('CANTIDAD'),
         const SizedBox(height: 8),
         TextField(
           style: const TextStyle(color: Color(0xFF0c6246)),
@@ -390,15 +499,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
           decoration: _inputDecoration('Ej: 500'),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'MOTIVO',
-          style: TextStyle(
-            color: AppColors.primary,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.1,
-          ),
-        ),
+        _buildLabel('MOTIVO'),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -443,6 +544,18 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLabel(String label) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: AppColors.primary,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.1,
+      ),
     );
   }
 
