@@ -786,6 +786,8 @@ combinaciones[clave] = {
   Future<List<Map<String, dynamic>>> obtenerRetiros({
     String? estado,
     String? lote,
+    String? codigoProducto,
+    int? limite,
     DateTime? desde,
     DateTime? hasta,
   }) async {
@@ -797,10 +799,17 @@ combinaciones[clave] = {
       where += ' AND estado = ?';
       args.add(estado);
     }
-    if (lote != null) {
+	
+	if (lote != null) {
       where += ' AND lote = ?';
       args.add(lote);
     }
+	
+    if (codigoProducto != null) {
+      where += ' AND codigoRecepcion LIKE ?';
+      args.add('$codigoProducto%');
+    }
+	
     if (desde != null) {
       where += ' AND fecha >= ?';
       args.add(desde.toIso8601String());
@@ -815,6 +824,7 @@ combinaciones[clave] = {
       where: where,
       whereArgs: args.isEmpty ? null : args,
       orderBy: 'fecha DESC',
+      limit: limite,
     );
 
     return rows.map((r) => Map<String, dynamic>.from(r)).toList();
