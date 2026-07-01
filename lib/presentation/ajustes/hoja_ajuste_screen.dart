@@ -87,10 +87,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
 
     if (producto == null) return;
 
-    if (companero.isEmpty) {
-      _mostrarError('Ingresá el nombre del compañero');
-      return;
-    }
+    // compañero opcional
     if (cantidad == null || cantidad <= 0) {
       _mostrarError('Ingresá una cantidad válida');
       return;
@@ -350,7 +347,7 @@ class _HojaAjusteScreenState extends State<HojaAjusteScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel('COMPAÑERO'),
+        _buildLabel('COMPAÑERO (opcional)'),
         const SizedBox(height: 8),
         TextField(
           style: const TextStyle(color: Color(0xFF0c6246)),

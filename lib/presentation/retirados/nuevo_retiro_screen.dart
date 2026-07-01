@@ -19,7 +19,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
 
   Map<String, dynamic>? _productoSeleccionado;
   final _companeroController = TextEditingController();
-  final _loteController = TextEditingController();
   final _cantidadController = TextEditingController();
   bool _guardando = false;
   String _error = '';
@@ -28,7 +27,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   void dispose() {
     _nombreController.dispose();
     _companeroController.dispose();
-    _loteController.dispose();
     _cantidadController.dispose();
     super.dispose();
   }
@@ -68,7 +66,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     setState(() {
       _productoSeleccionado = data;
       _companeroController.clear();
-      _loteController.clear();
       _cantidadController.clear();
       _error = '';
     });
@@ -76,13 +73,8 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
 
   Future<void> _confirmar() async {
     final companero = _companeroController.text.trim();
-    final lote = _loteController.text.trim();
     final cantidad = int.tryParse(_cantidadController.text.trim());
 
-    if (lote.isEmpty) {
-      setState(() => _error = 'Ingresa el número de lote');
-      return;
-    }
     if (cantidad == null || cantidad <= 0) {
       setState(() => _error = 'Ingresa la cantidad a retirar');
       return;
@@ -117,7 +109,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         tipo: data['tipo'] ?? '',
         idioma: data['idioma'] ?? '',
         companero: companero,
-        lote: lote,
+        lote: '',
         destino: 'general',
         destinoId: 'general',
         cantidadEstimada: cantidad,
@@ -364,15 +356,6 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         _buildTextField(
           controller: _companeroController,
           hint: 'Nombre del que retira',
-          capitalization: TextCapitalization.sentences,
-        ),
-        const SizedBox(height: 20),
-
-        _buildLabel('LOTE'),
-        const SizedBox(height: 8),
-        _buildTextField(
-          controller: _loteController,
-          hint: '',
           capitalization: TextCapitalization.sentences,
         ),
         const SizedBox(height: 20),

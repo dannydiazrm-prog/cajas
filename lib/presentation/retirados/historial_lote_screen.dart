@@ -14,22 +14,13 @@ class HistorialLoteScreen extends StatefulWidget {
   State<HistorialLoteScreen> createState() => _HistorialLoteScreenState();
 }
 
-class _HistorialLoteScreenState extends State<HistorialLoteScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  // Tab lote
-  final _loteController = TextEditingController();
-  List<Map<String, dynamic>> _resultadosLote = [];
-  bool _buscandoLote = false;
-  bool _buscadoLote = false;
-  bool _generando = false;
-
-  // Tab código
+class _HistorialLoteScreenState extends State<HistorialLoteScreen> {
+  // Búsqueda por código
   final _codigoController = TextEditingController();
-  List<Map<String, dynamic>> _resultadosCodigo = [];
-  bool _buscandoCodigo = false;
-  bool _buscadoCodigo = false;
+  List<Map<String, dynamic>> _resultados = [];
+  bool _buscando = false;
+  bool _buscado = false;
+  bool _generando = false;
 
   // Retiros del día
   List<Map<String, dynamic>> _retirosHoy = [];
@@ -43,14 +34,11 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _cargarRetirosHoy();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
-    _loteController.dispose();
     _codigoController.dispose();
     _perdidosController.dispose();
     super.dispose();
@@ -75,32 +63,13 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
     }
   }
 
-  Future<void> _buscarPorLote() async {
-    final lote = _loteController.text.trim();
-    if (lote.isEmpty) return;
-
-    setState(() {
-      _buscandoLote = true;
-      _buscadoLote = false;
-      _expandidoId = null;
-    });
-
-    final docs = await DataMaster().obtenerRetiros(lote: lote);
-
-    setState(() {
-      _resultadosLote = docs;
-      _buscandoLote = false;
-      _buscadoLote = true;
-    });
-  }
-
-  Future<void> _buscarPorCodigo() async {
+  Future<void> _buscar() async {
     final codigo = _codigoController.text.trim();
     if (codigo.isEmpty) return;
 
     setState(() {
-      _buscandoCodigo = true;
-      _buscadoCodigo = false;
+      _buscando = true;
+      _buscado = false;
       _expandidoId = null;
     });
 
@@ -110,9 +79,9 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
     );
 
     setState(() {
-      _resultadosCodigo = docs;
-      _buscandoCodigo = false;
-      _buscadoCodigo = true;
+      _resultados = docs;
+      _buscando = false;
+      _buscado = true;
     });
   }
 
@@ -155,7 +124,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
         recepcionIds: recepcionIds,
       );
 
-      // Actualizar el campo cantidadDevuelta del retiro para trazabilidad
+      // Actualizar cantidadDevuelta en el retiro para trazabilidad
       final perdidosActuales =
           (data['cantidadDevuelta'] as num?)?.toInt() ?? 0;
       final nuevosPerdidos = perdidosActuales + cantidad;
@@ -178,8 +147,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
       });
 
       await _cargarRetirosHoy();
-      if (_buscadoLote) await _buscarPorLote();
-      if (_buscadoCodigo) await _buscarPorCodigo();
+      if (_buscado) await _buscar();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -220,11 +188,11 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
       final pdf = pw.Document();
       final fecha = DateTime.now();
       final fechaStr = _formatFecha(fecha);
-      final lote = _loteController.text.trim();
+      final codigo = _codigoController.text.trim();
 
       int totalEntregado = 0;
       int totalPerdidos = 0;
-      for (final data in _resultadosLote) {
+      for (final data in _resultados) {
         totalEntregado += (data['cantidadEntregada'] ?? 0) as int;
         totalPerdidos += (data['cantidadDevuelta'] ?? 0) as int;
       }
@@ -253,7 +221,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
               ),
               pw.SizedBox(height: 4),
               pw.Text(
-                'HISTORIAL - LOTE: $lote',
+                'HISTORIAL - CÓDIGO: $codigo',
                 style: pw.TextStyle(
                   fontSize: 12,
                   fontWeight: pw.FontWeight.bold,
@@ -281,7 +249,13 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
                 pw.TableRow(
                   decoration: pw.BoxDecoration(
                       color: PdfColor.fromHex('#0c6246')),
-                  children: ['PRODUCTO', 'COMPAÑERO', 'RETIRADO', 'PERDIDOS', 'FECHA']
+                  children: [
+                    'PRODUCTO',
+                    'COMPAÑERO',
+                    'RETIRADO',
+                    'PERDIDOS',
+                    'FECHA',
+                  ]
                       .map((h) => pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
                             child: pw.Text(h,
@@ -292,7 +266,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
                           ))
                       .toList(),
                 ),
-                ..._resultadosLote.map((data) {
+                ..._resultados.map((data) {
                   final perdidos =
                       (data['cantidadDevuelta'] ?? 0) as int;
                   return pw.TableRow(
@@ -326,13 +300,13 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('RESUMEN DEL LOTE',
+                  pw.Text('RESUMEN',
                       style: pw.TextStyle(
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColor.fromHex('#0c6246'),
                           fontSize: 11)),
                   pw.SizedBox(height: 8),
-                  pw.Text('Total movimientos: ${_resultadosLote.length}',
+                  pw.Text('Total movimientos: ${_resultados.length}',
                       style: const pw.TextStyle(fontSize: 10)),
                   pw.Text('Total retirado: $totalEntregado cajas',
                       style: const pw.TextStyle(fontSize: 10)),
@@ -347,7 +321,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
 
       await Printing.layoutPdf(
         onLayout: (format) async => pdf.save(),
-        name: 'lote_${lote}_$fechaStr.pdf',
+        name: 'historial_${codigo}_$fechaStr.pdf',
       );
     } catch (e) {
       if (mounted) {
@@ -369,244 +343,130 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
       body: Column(
         children: [
           _buildHeader(context),
-          TabBar(
-            controller: _tabController,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: AppColors.primary,
-            tabs: const [
-              Tab(text: 'POR LOTE'),
-              Tab(text: 'POR CÓDIGO'),
-            ],
-          ),
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildTabLote(),
-                _buildTabCodigo(),
-              ],
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'BUSCAR POR CÓDIGO',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Muestra los últimos 3 retiros del código ingresado',
+                      style:
+                          TextStyle(color: AppColors.primary, fontSize: 11),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            style: const TextStyle(
+                                color: Color(0xFF0c6246)),
+                            controller: _codigoController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              hintText: 'Ej: 67123',
+                              prefixIcon: const Icon(Icons.qr_code,
+                                  color: AppColors.primary),
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                    color: AppColors.primary),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                    color: AppColors.primary, width: 2),
+                              ),
+                            ),
+                            onSubmitted: (_) => _buscar(),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: _buscando ? null : _buscar,
+                            child: _buscando
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2),
+                                  )
+                                : const Text('BUSCAR',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    if (_buscado) ...[
+                      if (_resultados.isEmpty)
+                        const Center(
+                          child: Text(
+                            'No se encontraron retiros para ese código',
+                            style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      else ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Últimos ${_resultados.length} retiro${_resultados.length != 1 ? 's' : ''}',
+                                style: const TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: _generando ? null : _generarPDF,
+                              icon: const Icon(
+                                  Icons.picture_as_pdf_outlined,
+                                  size: 18),
+                              label: _generando
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2))
+                                  : const Text('PDF'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ..._resultados
+                            .map((data) => _buildRetiroItem(data)),
+                      ],
+                    ],
+                    const SizedBox(height: 32),
+                    _buildRetirosHoy(),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTabLote() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'BUSCAR POR LOTE',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    style: const TextStyle(color: Color(0xFF0c6246)),
-                    controller: _loteController,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: 'Número de lote',
-                      prefixIcon: const Icon(Icons.search,
-                          color: AppColors.primary),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: AppColors.primary),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 2),
-                      ),
-                    ),
-                    onSubmitted: (_) => _buscarPorLote(),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: _buscandoLote ? null : _buscarPorLote,
-                    child: _buscandoLote
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Text('BUSCAR',
-                            style:
-                                TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            if (_buscadoLote) ...[
-              if (_resultadosLote.isEmpty)
-                const Center(
-                  child: Text(
-                    'No se encontraron movimientos para ese lote',
-                    style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else ...[
-                _buildResumen(_resultadosLote, _loteController.text.trim()),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${_resultadosLote.length} movimiento${_resultadosLote.length != 1 ? 's' : ''}',
-                        style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _generando ? null : _generarPDF,
-                      icon: const Icon(Icons.picture_as_pdf_outlined,
-                          size: 18),
-                      label: _generando
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2),
-                            )
-                          : const Text('PDF'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ..._resultadosLote.map((data) => _buildRetiroItem(data)),
-              ],
-            ],
-            const SizedBox(height: 32),
-            _buildRetirosHoy(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTabCodigo() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'BUSCAR POR CÓDIGO DE PRODUCTO',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Muestra los últimos 3 retiros del código ingresado',
-              style: TextStyle(color: AppColors.primary, fontSize: 11),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    style: const TextStyle(color: Color(0xFF0c6246)),
-                    controller: _codigoController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: 'Ej: 67',
-                      prefixIcon: const Icon(Icons.qr_code,
-                          color: AppColors.primary),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: AppColors.primary),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 2),
-                      ),
-                    ),
-                    onSubmitted: (_) => _buscarPorCodigo(),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed:
-                        _buscandoCodigo ? null : _buscarPorCodigo,
-                    child: _buscandoCodigo
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Text('BUSCAR',
-                            style:
-                                TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            if (_buscadoCodigo) ...[
-              if (_resultadosCodigo.isEmpty)
-                const Center(
-                  child: Text(
-                    'No se encontraron retiros para ese código',
-                    style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else ...[
-                Text(
-                  'Últimos ${_resultadosCodigo.length} retiro${_resultadosCodigo.length != 1 ? 's' : ''}',
-                  style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                ..._resultadosCodigo
-                    .map((data) => _buildRetiroItem(data)),
-              ],
-            ],
-            const SizedBox(height: 32),
-            _buildRetirosHoy(),
-          ],
-        ),
       ),
     );
   }
@@ -643,7 +503,8 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
             child: const Text(
               'No hay retiros registrados hoy',
               style: TextStyle(
-                  color: AppColors.primary, fontWeight: FontWeight.w600),
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
             ),
           )
@@ -707,11 +568,14 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
                           spacing: 8,
                           runSpacing: 4,
                           children: [
-                            if ((data['lote'] ?? '').toString().isNotEmpty)
-                              _buildTag('Lote: ${data['lote']}'),
-                            if ((data['destino'] ?? '').toString().isNotEmpty)
-                              _buildTag('📍 ${data['destino']}'),
-                            if ((data['companero'] ?? '').toString().isNotEmpty)
+                            if ((data['codigoRecepcion'] ?? '')
+                                .toString()
+                                .isNotEmpty)
+                              _buildTag(
+                                  'Cód: ${data['codigoRecepcion']}'),
+                            if ((data['companero'] ?? '')
+                                .toString()
+                                .isNotEmpty)
                               _buildTag('👤 ${data['companero']}'),
                             _buildTag('📤 Retirado: $retirado'),
                             if (perdidos > 0)
@@ -760,7 +624,7 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
                           child: Text(
                             perdidos > 0
                                 ? 'Ya hay $perdidos cajas perdidas registradas. Podés agregar más.'
-                                : 'Registrá las cajas dañadas en calibración. Se descontarán del stock.',
+                                : 'Registrá las cajas dañadas. Se descontarán del stock.',
                             style: const TextStyle(
                               color: Colors.orange,
                               fontSize: 12,
@@ -828,69 +692,6 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
           ],
         ],
       ),
-    );
-  }
-
-  Widget _buildResumen(List<Map<String, dynamic>> docs, String lote) {
-    int totalEntregado = 0;
-    int totalPerdidos = 0;
-    for (final data in docs) {
-      totalEntregado += (data['cantidadEntregada'] ?? 0) as int;
-      totalPerdidos += (data['cantidadDevuelta'] ?? 0) as int;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'LOTE: $lote',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                  child: _buildResumenItem(
-                      'MOVIMIENTOS', docs.length.toString())),
-              Expanded(
-                  child: _buildResumenItem(
-                      'RETIRADO', totalEntregado.toString())),
-              Expanded(
-                  child: _buildResumenItem(
-                      'PERDIDOS', totalPerdidos.toString())),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResumenItem(String label, String valor) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 10,
-                fontWeight: FontWeight.w600)),
-        Text(valor,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w900)),
-      ],
     );
   }
 
