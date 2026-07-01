@@ -65,13 +65,7 @@ class _Body extends StatelessWidget {
       label: 'NUEVO PRODUCTO',
       route: '/inventario/nuevo-producto',
       icon: Icons.add_box_outlined,
-      descripcion: 'Registrar etiqueta o prospecto',
-    ),
-    _MenuButton(
-      label: 'NUEVO DESTINO',
-      route: '/inventario/nuevo-destino',
-      icon: Icons.flag_outlined,
-      descripcion: 'Agregar país o destino',
+      descripcion: 'Registrar nuevo producto',
     ),
     _MenuButton(
       label: 'TOMA DE INVENTARIO',
@@ -84,6 +78,12 @@ class _Body extends StatelessWidget {
       route: '/inventario/stock',
       icon: Icons.warning_amber_outlined,
       descripcion: 'Alertas de stock mínimo',
+    ),
+    _MenuButton(
+      label: 'TRANSFERIR STOCK',
+      route: '/inventario/transferir',
+      icon: Icons.swap_horiz_outlined,
+      descripcion: 'Mover stock de un código a otro',
     ),
   ];
 

@@ -9,8 +9,6 @@ import '../../presentation/perfil/carga_inicial_screen.dart';
 import '../../presentation/dashboard/dashboard_screen.dart';
 import '../../presentation/retirados/retirados_screen.dart';
 import '../../presentation/retirados/nuevo_retiro_screen.dart';
-import '../../presentation/retirados/pendientes_screen.dart';
-import '../../presentation/retirados/retiros_del_dia_screen.dart';
 import '../../presentation/retirados/historial_lote_screen.dart';
 import '../../presentation/recibidos/recibidos_screen.dart';
 import '../../presentation/recibidos/recibir_producto_screen.dart';
@@ -26,6 +24,7 @@ import '../../presentation/inventario/toma_inventario_screen.dart';
 import '../../presentation/inventario/ver_productos_screen.dart';
 import '../../presentation/inventario/reportes_screen.dart';
 import '../../presentation/inventario/control_stock_screen.dart';
+import '../../presentation/inventario/transferir_stock_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/pin',
@@ -73,14 +72,6 @@ final appRouter = GoRouter(
         GoRoute(
           path: 'nuevo',
           builder: (context, state) => const NuevoRetiroScreen(),
-        ),
-        GoRoute(
-          path: 'pendientes',
-          builder: (context, state) => const PendientesScreen(),
-        ),
-        GoRoute(
-          path: 'del-dia',
-          builder: (context, state) => const RetirosDiaScreen(),
         ),
         GoRoute(
           path: 'historial',
@@ -149,6 +140,10 @@ final appRouter = GoRouter(
         GoRoute(
           path: 'stock',
           builder: (context, state) => const ControlStockScreen(),
+        ),
+        GoRoute(
+          path: 'transferir',
+          builder: (context, state) => const TransferirStockScreen(),
         ),
       ],
     ),

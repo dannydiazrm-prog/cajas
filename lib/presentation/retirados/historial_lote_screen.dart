@@ -132,17 +132,43 @@ class _HistorialLoteScreenState extends State<HistorialLoteScreen>
     setState(() => _guardandoPerdidos = true);
 
     try {
-      final retiroId = data['id']?.toString() ?? '';
+      final productoId = data['productoId']?.toString() ?? '';
+
+      final combinaciones = await DataMaster()
+          .obtenerCombinacionesRecepcion(productoId);
+
+      final recepcionIds = combinaciones
+          .expand(
+              (c) => List<String>.from(c['recepcionIds'] as List? ?? []))
+          .toList();
+
+      await DataMaster().registrarAjuste(
+        tipo: 'ajuste_manual',
+        tipoAjuste: 'resta',
+        productoId: productoId,
+        productoNombre: data['productoNombre']?.toString() ?? '',
+        tipoProducto: data['tipo']?.toString() ?? '',
+        idioma: data['idioma']?.toString() ?? '',
+        cantidad: cantidad,
+        motivo: 'Pérdida en calibración',
+        destinosIds: ['general'],
+        recepcionIds: recepcionIds,
+      );
+
+      // Actualizar el campo cantidadDevuelta del retiro para trazabilidad
       final perdidosActuales =
           (data['cantidadDevuelta'] as num?)?.toInt() ?? 0;
       final nuevosPerdidos = perdidosActuales + cantidad;
 
-      await DataMaster().cerrarRetiro(
-        retiroId: retiroId,
-        productoId: data['productoId']?.toString() ?? '',
-        destinoId: data['destinoId']?.toString() ?? '',
-        cantidadDevuelta: nuevosPerdidos,
-        motivoCierre: 'Pérdida en calibración',
+      final database = await DataMaster().db;
+      await database.update(
+        'retiros',
+        {
+          'cantidadDevuelta': nuevosPerdidos,
+          'sincronizado': 0,
+        },
+        where: 'id = ?',
+        whereArgs: [data['id']],
       );
 
       setState(() {
