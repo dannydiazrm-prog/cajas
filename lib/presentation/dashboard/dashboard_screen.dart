@@ -43,7 +43,7 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'DEPÓSITO DE ETIQUETAS',
+              'DEPÓSITO DE CAJAS.',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: Breakpoints.isMobile(context) ? 16 : 24,
@@ -157,7 +157,7 @@ class _Footer extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: const [
           Text(
-            '05/2026',
+            '07/2026',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,

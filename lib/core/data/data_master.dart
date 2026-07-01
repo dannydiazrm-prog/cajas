@@ -169,6 +169,9 @@ class DataMaster {
       await _descargarProductos();
       await _descargarDestinos();
       await _descargarConfig();
+      await _descargarRecepciones();
+      await _descargarRetiros();
+      await _descargarAjustes();
     } catch (e) {
       // Sin internet, usa datos locales
     }
@@ -295,6 +298,128 @@ class DataMaster {
           .map((e) => e.toString())
           .toList();
       await guardarConfig('prefijos_usados', jsonEncode(usados));
+    }
+  }
+  
+  Future<void> _descargarRecepciones() async {
+    final snapshot =
+        await FirebaseFirestore.instance.collection('recepciones').get();
+    final database = await db;
+
+    for (final doc in snapshot.docs) {
+      final local = await database.query(
+        'recepciones',
+        where: 'id = ?',
+        whereArgs: [doc.id],
+      );
+
+      if (local.isNotEmpty && local.first['sincronizado'] == 0) continue;
+
+      final data = doc.data();
+      await database.insert(
+        'recepciones',
+        {
+          'id': doc.id,
+          'productoId': data['productoId'] ?? '',
+          'productoNombre': data['productoNombre'] ?? '',
+          'tipo': data['tipo'] ?? '',
+          'idioma': data['idioma'] ?? '',
+          'cantidad': data['cantidad'] ?? 0,
+          'cantidadActual': data['cantidadActual'] ?? 0,
+          'codigo': data['codigo'] ?? '',
+          'destinoClave': data['destinoClave'] ?? '',
+          'destinos': jsonEncode(data['destinos'] ?? []),
+          'esCargaInicial': (data['esCargaInicial'] == true) ? 1 : 0,
+          'fecha': data['fecha']?.toDate()?.toIso8601String() ?? DateTime.now().toIso8601String(),
+          'sincronizado': 1,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  Future<void> _descargarRetiros() async {
+    final snapshot =
+        await FirebaseFirestore.instance.collection('retiros').get();
+    final database = await db;
+
+    for (final doc in snapshot.docs) {
+      final local = await database.query(
+        'retiros',
+        where: 'id = ?',
+        whereArgs: [doc.id],
+      );
+
+      if (local.isNotEmpty && local.first['sincronizado'] == 0) continue;
+
+      final data = doc.data();
+      await database.insert(
+        'retiros',
+        {
+          'id': doc.id,
+          'productoId': data['productoId'] ?? '',
+          'productoNombre': data['productoNombre'] ?? '',
+          'tipo': data['tipo'] ?? '',
+          'idioma': data['idioma'] ?? '',
+          'companero': data['companero'] ?? '',
+          'lote': data['lote'] ?? '',
+          'destino': data['destino'] ?? '',
+          'destinoId': data['destinoId'] ?? '',
+          'cantidadEstimada': data['cantidadEstimada'] ?? 0,
+          'cantidadEntregada': data['cantidadEntregada'] ?? 0,
+          'cantidadDevuelta': data['cantidadDevuelta'] ?? 0,
+          'consumoReal': data['consumoReal'],
+          'perdida': data['perdida'],
+          'motivoCierre': data['motivoCierre'],
+          'estado': data['estado'] ?? 'pendiente',
+          'codigoRecepcion': data['codigoRecepcion'] ?? '',
+          'fecha': data['fecha']?.toDate()?.toIso8601String() ?? DateTime.now().toIso8601String(),
+          'fechaCierre': data['fechaCierre'],
+          'sincronizado': 1,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  Future<void> _descargarAjustes() async {
+    final snapshot =
+        await FirebaseFirestore.instance.collection('ajustes').get();
+    final database = await db;
+
+    for (final doc in snapshot.docs) {
+      final local = await database.query(
+        'ajustes',
+        where: 'id = ?',
+        whereArgs: [doc.id],
+      );
+
+      if (local.isNotEmpty && local.first['sincronizado'] == 0) continue;
+
+      final data = doc.data();
+      await database.insert(
+        'ajustes',
+        {
+          'id': doc.id,
+          'tipo': data['tipo'] ?? '',
+          'tipoAjuste': data['tipoAjuste'] ?? '',
+          'productoId': data['productoId'] ?? '',
+          'productoNombre': data['productoNombre'] ?? '',
+          'tipoProducto': data['tipoProducto'] ?? '',
+          'idioma': data['idioma'] ?? '',
+          'cantidad': data['cantidad'] ?? 0,
+          'motivo': data['motivo'] ?? '',
+          'stockAnterior': data['stockAnterior'] ?? 0,
+          'stockNuevo': data['stockNuevo'] ?? 0,
+          'lote': data['lote'] ?? '',
+          'companero': data['companero'] ?? '',
+          'retiroId': data['retiroId'] ?? '',
+          'recepcionId': data['recepcionId'] ?? '',
+          'fecha': data['fecha']?.toDate()?.toIso8601String() ?? DateTime.now().toIso8601String(),
+          'sincronizado': 1,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
   }
 

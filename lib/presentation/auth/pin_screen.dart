@@ -147,7 +147,7 @@ class _Header extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'DEPÓSITO DE ETIQUETAS',
+          'DEPÓSITO DE CAJAS',
           style: TextStyle(
             color: AppColors.primary.withValues(alpha: 0.85),
             fontSize: 11,

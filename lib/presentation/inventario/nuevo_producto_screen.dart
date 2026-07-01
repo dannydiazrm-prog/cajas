@@ -43,6 +43,24 @@ class _NuevoProductoScreenState extends State<NuevoProductoScreen> {
     });
 
     try {
+      // Verificar si ya existe un producto con ese código
+      final productos = await DataMaster().obtenerProductos();
+      final codigoExiste = productos.any(
+        (p) => (p['codigo'] ?? '').toString() == codigo,
+      );
+
+      if (codigoExiste) {
+        final productoExistente = productos.firstWhere(
+          (p) => (p['codigo'] ?? '').toString() == codigo,
+        );
+        setState(() {
+          _error =
+              'El código $codigo ya está en uso por "${productoExistente['nombre']}"';
+          _loading = false;
+        });
+        return;
+      }
+
       await DataMaster().crearProducto(
         nombre: nombre,
         codigo: codigo,
