@@ -497,8 +497,6 @@ class _GestionRecepcionesScreenState extends State<GestionRecepcionesScreen> {
                                       spacing: 8,
                                       runSpacing: 4,
                                       children: [
-                                        _buildTag(data['tipo'] ?? ''),
-                                        _buildTag(data['idioma'] ?? ''),
                                         _buildTag(
                                             'Cód: ${data['codigo'] ?? '-'}'),
                                         _buildTag(

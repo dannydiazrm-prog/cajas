@@ -37,10 +37,15 @@ class _EliminarProductoScreenState
 
     final todos = await DataMaster().obtenerProductos();
     final filtrados = todos.where((p) {
-      return (p['nombre'] ?? '')
+      final matchNombre = (p['nombre'] ?? '')
           .toString()
           .toLowerCase()
           .contains(nombre);
+      final matchCodigo = (p['codigo'] ?? '')
+          .toString()
+          .toLowerCase()
+          .contains(nombre);
+      return matchNombre || matchCodigo;
     }).toList();
 
     setState(() {
@@ -80,8 +85,7 @@ class _EliminarProductoScreenState
               ),
             ),
             const SizedBox(height: 4),
-            Text('Tipo: ${data['tipo'] ?? '-'}'),
-            Text('Idioma: ${data['idioma'] ?? '-'}'),
+            Text('Código: ${data['codigo'] ?? '-'}'),
             Text('Stock actual: ${data['stockActual'] ?? 0}'),
             const SizedBox(height: 12),
             const Text(
@@ -336,7 +340,10 @@ class _EliminarProductoScreenState
                                       spacing: 8,
                                       runSpacing: 4,
                                       children: [
-                                        _buildTag(data['tipo'] ?? ''),
+                                        if ((data['codigo'] ?? '').toString().isNotEmpty)
+                                          _buildTag('Cód: ${data['codigo']}'),
+                                        _buildTag(
+                                          'Stock: ${data['stockActual'] ?? 0}',
                                         _buildTag(data['idioma'] ?? ''),
                                         _buildTag(
                                           'Stock: ${data['stockActual'] ?? 0}',

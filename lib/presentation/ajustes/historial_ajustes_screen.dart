@@ -134,7 +134,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'DEPÓSITO DE ETIQUETAS - GALMEDIC',
+                    'DEPÓSITO DE CAJAS - GALMEDIC',
                     style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
@@ -476,9 +476,7 @@ class _HistorialAjustesScreenState extends State<HistorialAjustesScreen> {
                                       '📝 ${data['motivo'] ?? ''}'),
                                   if (data['companero'] != null)
                                     _buildTag(
-                                        '👤 ${data['companero']}'),
-                                  if (data['lote'] != null)
-                                    _buildTag('🔖 ${data['lote']}'),
+                                        '👤 ${data['companero']}'),          
                                   if (esInventario &&
                                       data['stockAnterior'] != null)
                                     _buildTag(

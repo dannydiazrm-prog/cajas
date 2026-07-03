@@ -162,7 +162,7 @@ class _HistorialRecepcionesScreenState
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'DEPÓSITO DE ETIQUETAS - GALMEDIC',
+                    'DEPÓSITO DE CAJAS - GALMEDIC',
                     style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
@@ -196,9 +196,8 @@ class _HistorialRecepcionesScreenState
               columnWidths: {
                 0: const pw.FlexColumnWidth(3),
                 1: const pw.FlexColumnWidth(1.5),
-                2: const pw.FlexColumnWidth(1),
-                3: const pw.FlexColumnWidth(1.5),
-                4: const pw.FlexColumnWidth(2),
+                2: const pw.FlexColumnWidth(1.5),
+                3: const pw.FlexColumnWidth(2),
               },
               children: [
                 pw.TableRow(
@@ -207,8 +206,7 @@ class _HistorialRecepcionesScreenState
                   ),
                   children: [
                     'PRODUCTO',
-                    'TIPO',
-                    'IDIOMA',
+                    'CÓDIGO',
                     'CANTIDAD',
                     'FECHA',
                   ]
@@ -229,8 +227,7 @@ class _HistorialRecepcionesScreenState
                   return pw.TableRow(
                     children: [
                       data['productoNombre'] ?? '',
-                      data['tipo'] ?? '',
-                      data['idioma'] ?? '',
+                      data['codigo'] ?? '',
                       (data['cantidad'] ?? 0).toString(),
                       _formatFechaRaw(data['fecha']),
                     ]
@@ -446,13 +443,8 @@ class _HistorialRecepcionesScreenState
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              _buildTag(data['tipo'] ?? ''),
-                              const SizedBox(width: 6),
-                              _buildTag(data['idioma'] ?? ''),
-                            ],
-                          ),
+                          if ((data['codigo'] ?? '').toString().isNotEmpty)
+                            _buildTag('Cód: ${data['codigo']}'),
                           const SizedBox(height: 8),
                           Row(
                             children: [

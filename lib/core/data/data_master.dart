@@ -1430,7 +1430,7 @@ combinaciones[clave] = {
         'destinoClave': row['destinoClave'],
         'destinos': jsonDecode(row['destinos'] as String),
         'esCargaInicial': row['esCargaInicial'] == 1,
-        'fecha': FieldValue.serverTimestamp(),
+        'fecha': row['fecha'],
       });
 
       if (idLocal.startsWith('local_')) {
@@ -1508,8 +1508,7 @@ combinaciones[clave] = {
         'motivoCierre': row['motivoCierre'],
         'estado': row['estado'],
         'codigoRecepcion': row['codigoRecepcion'],
-        'fecha': FieldValue.serverTimestamp(),
-        // FIX Bug 2: usar la fecha real de cierre guardada en SQLite
+        'fecha': row['fecha'],
         'fechaCierre': row['fechaCierre'],
       });
 

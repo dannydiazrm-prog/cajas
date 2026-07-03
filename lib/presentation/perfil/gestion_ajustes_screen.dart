@@ -512,8 +512,6 @@ class _GestionAjustesScreenState extends State<GestionAjustesScreen> {
                                       spacing: 8,
                                       runSpacing: 4,
                                       children: [
-                                        _buildTag(data['tipo'] ?? ''),
-                                        _buildTag(data['idioma'] ?? ''),
                                         _buildTag(
                                           esEntrada
                                               ? '+${data['cantidad'] ?? 0}'
