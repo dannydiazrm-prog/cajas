@@ -12,8 +12,7 @@ class EliminarProductoScreen extends StatefulWidget {
       _EliminarProductoScreenState();
 }
 
-class _EliminarProductoScreenState
-    extends State<EliminarProductoScreen> {
+class _EliminarProductoScreenState extends State<EliminarProductoScreen> {
   final _nombreController = TextEditingController();
   List<Map<String, dynamic>> _resultados = [];
   bool _buscando = false;
@@ -86,7 +85,7 @@ class _EliminarProductoScreenState
             ),
             const SizedBox(height: 4),
             Text('Código: ${data['codigo'] ?? '-'}'),
-            Text('Stock actual: ${data['stockActual'] ?? 0}'),
+            Text('Stock actual: ${(data['stockActual'] as num?)?.toInt() ?? 0}'),
             const SizedBox(height: 12),
             const Text(
               'Se eliminarán el producto y todos sus registros: recepciones, retiros y ajustes. Esta acción es completamente irreversible.',
@@ -231,10 +230,11 @@ class _EliminarProductoScreenState
                       children: [
                         Expanded(
                           child: TextField(
-                            style: const TextStyle(color: Color(0xFF0c6246)),
+                            style:
+                                const TextStyle(color: Color(0xFF0c6246)),
                             controller: _nombreController,
                             decoration: InputDecoration(
-                              hintText: 'Buscar producto por nombre',
+                              hintText: 'Buscar por nombre o código',
                               prefixIcon: const Icon(Icons.search,
                                   color: AppColors.primary),
                               filled: true,
@@ -310,6 +310,9 @@ class _EliminarProductoScreenState
                           ),
                         ),
                       ..._resultados.map((data) {
+                        final codigo = data['codigo']?.toString() ?? '';
+                        final stock =
+                            (data['stockActual'] as num?)?.toInt() ?? 0;
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(16),
@@ -340,17 +343,13 @@ class _EliminarProductoScreenState
                                       spacing: 8,
                                       runSpacing: 4,
                                       children: [
-                                        if ((data['codigo'] ?? '').toString().isNotEmpty)
-                                          _buildTag('Cód: ${data['codigo']}'),
+                                        if (codigo.isNotEmpty)
+                                          _buildTag('Cód: $codigo'),
                                         _buildTag(
-                                          'Stock: ${data['stockActual'] ?? 0}',
-                                        _buildTag(data['idioma'] ?? ''),
-                                        _buildTag(
-                                          'Stock: ${data['stockActual'] ?? 0}',
-                                          color:
-                                              (data['stockActual'] ?? 0) > 0
-                                                  ? Colors.orange
-                                                  : AppColors.primary,
+                                          'Stock: $stock',
+                                          color: stock > 0
+                                              ? Colors.orange
+                                              : AppColors.primary,
                                         ),
                                       ],
                                     ),
