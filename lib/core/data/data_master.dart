@@ -1050,11 +1050,10 @@ combinaciones[clave] = {
     final fecha = DateTime.now().toIso8601String();
 
     await database.transaction((txn) async {
-      await txn.delete('ajustes', where: 'id = ?', whereArgs: [ajusteId]);
-
+      // Actualizar cantidadActual de las recepciones involucradas
       int restante = cantidad;
       for (final recepcionId in recepcionIds) {
-        if (recepcionId.isEmpty || restante <= 0) break;
+        if (restante <= 0) break;
         final recRows = await txn.query(
           'recepciones',
           where: 'id = ?',
@@ -1062,31 +1061,22 @@ combinaciones[clave] = {
         );
         if (recRows.isEmpty) continue;
         final actual = (recRows.first['cantidadActual'] as num?)?.toInt() ?? 0;
-        final original = (recRows.first['cantidad'] as num?)?.toInt() ?? 0;
         int nuevaCantidad;
         if (tipoAjuste == 'suma') {
-          // revertir suma → restar
+          nuevaCantidad = actual + restante;
+          restante = 0;
+        } else {
           final descontar = restante > actual ? actual : restante;
           nuevaCantidad = actual - descontar;
           restante -= descontar;
-        } else {
-          // revertir resta → sumar, sin superar el original
-          final espacio = original - actual;
-          final devolver = restante > espacio ? espacio : restante;
-          nuevaCantidad = actual + devolver;
-          restante -= devolver;
         }
         await txn.update(
           'recepciones',
-          {
-            'cantidadActual': nuevaCantidad.clamp(0, double.maxFinite).toInt(),
-            'sincronizado': 0,
-          },
+          {'cantidadActual': nuevaCantidad, 'sincronizado': 0},
           where: 'id = ?',
           whereArgs: [recepcionId],
         );
       }
-    });
 
       await txn.insert('ajustes', {
         'id': id,
@@ -1099,7 +1089,7 @@ combinaciones[clave] = {
         'cantidad': cantidad,
         'motivo': motivo,
         'stockAnterior': stockAnterior,
-        'stockNuevo': 0, // se actualiza abajo
+        'stockNuevo': 0,
         'recepcionId': recepcionIds.join(','),
         'lote': lote,
         'companero': companero,
@@ -1759,13 +1749,14 @@ combinaciones[clave] = {
       if (cantidad > 0) return false;
     }
 
-    // Revertir cantidadActual de las recepciones afectadas
+    /// Revertir cantidadActual de las recepciones afectadas
     final cantidad = (ajuste['cantidad'] as num?)?.toInt() ?? 0;
     await database.transaction((txn) async {
       await txn.delete('ajustes', where: 'id = ?', whereArgs: [ajusteId]);
 
+      int restante = cantidad;
       for (final recepcionId in recepcionIds) {
-        if (recepcionId.isEmpty) continue;
+        if (recepcionId.isEmpty || restante <= 0) break;
         final recRows = await txn.query(
           'recepciones',
           where: 'id = ?',
@@ -1773,13 +1764,22 @@ combinaciones[clave] = {
         );
         if (recRows.isEmpty) continue;
         final actual = (recRows.first['cantidadActual'] as num?)?.toInt() ?? 0;
-        final revertido = tipoAjuste == 'suma'
-            ? actual - cantidad
-            : actual + cantidad;
+        final original = (recRows.first['cantidad'] as num?)?.toInt() ?? 0;
+        int nuevaCantidad;
+        if (tipoAjuste == 'suma') {
+          final descontar = restante > actual ? actual : restante;
+          nuevaCantidad = actual - descontar;
+          restante -= descontar;
+        } else {
+          final espacio = original - actual;
+          final devolver = restante > espacio ? espacio : restante;
+          nuevaCantidad = actual + devolver;
+          restante -= devolver;
+        }
         await txn.update(
           'recepciones',
           {
-            'cantidadActual': revertido.clamp(0, double.maxFinite).toInt(),
+            'cantidadActual': nuevaCantidad.clamp(0, double.maxFinite).toInt(),
             'sincronizado': 0,
           },
           where: 'id = ?',
