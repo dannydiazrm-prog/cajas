@@ -78,7 +78,7 @@ class _PinScreenState extends State<PinScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0a1f17), // verde muy oscuro, neutro
+      backgroundColor: const Color(0xFF0C6246), // mismo verde del logo
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -117,19 +117,11 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Logo con fondo redondeado sutil
-        Container(
-          width: 88,
-          height: 88,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
-              width: 1,
-            ),
-          ),
-          padding: const EdgeInsets.all(12),
+        // Logo sin contenedor: flota directo sobre el fondo, que ya
+        // comparte el mismo verde del logo.
+        SizedBox(
+          width: 96,
+          height: 96,
           child: Image.asset(
             'assets/images/logo_galmedic.webp',
             fit: BoxFit.contain,
@@ -149,7 +141,7 @@ class _Header extends StatelessWidget {
         Text(
           'DEPÓSITO DE CAJAS',
           style: TextStyle(
-            color: AppColors.primary.withValues(alpha: 0.85),
+            color: Colors.white.withValues(alpha: 0.7),
             fontSize: 11,
             fontWeight: FontWeight.w500,
             letterSpacing: 2.5,
@@ -210,19 +202,17 @@ class _PinIndicator extends StatelessWidget {
                 height: filled ? 18 : 14,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: filled
-                      ? AppColors.primary
-                      : Colors.transparent,
+                  color: filled ? Colors.white : Colors.transparent,
                   border: Border.all(
                     color: filled
-                        ? AppColors.primary
-                        : Colors.white.withValues(alpha: 0.25),
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.35),
                     width: 2,
                   ),
                   boxShadow: filled
                       ? [
                           BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.5),
+                            color: Colors.white.withValues(alpha: 0.4),
                             blurRadius: 8,
                             spreadRadius: 1,
                           )
@@ -271,7 +261,7 @@ class _LoadingIndicator extends StatelessWidget {
               width: 36,
               height: 36,
               child: CircularProgressIndicator(
-                color: AppColors.primary,
+                color: Colors.white,
                 strokeWidth: 2.5,
               ),
             ),
@@ -279,7 +269,7 @@ class _LoadingIndicator extends StatelessWidget {
             Text(
               'Verificando...',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.35),
+                color: Colors.white.withValues(alpha: 0.6),
                 fontSize: 13,
                 letterSpacing: 0.5,
               ),
@@ -383,22 +373,20 @@ class _TeclaButtonState extends State<_TeclaButton> {
           borderRadius: BorderRadius.circular(20),
           color: _pressed
               ? (widget.isDel
-                  ? Colors.white.withValues(alpha: 0.12)
-                  : AppColors.primary.withValues(alpha: 0.9))
+                  ? Colors.white.withValues(alpha: 0.18)
+                  : Colors.white.withValues(alpha: 0.9))
               : (widget.isDel
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : Colors.white.withValues(alpha: 0.08)),
+                  ? Colors.white.withValues(alpha: 0.10)
+                  : Colors.white.withValues(alpha: 0.14)),
           border: Border.all(
-            color: widget.isDel
-                ? Colors.white.withValues(alpha: 0.12)
-                : Colors.white.withValues(alpha: 0.10),
+            color: Colors.white.withValues(alpha: 0.14),
             width: 1,
           ),
           boxShadow: _pressed
               ? null
               : [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
+                    color: Colors.black.withValues(alpha: 0.20),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -408,7 +396,7 @@ class _TeclaButtonState extends State<_TeclaButton> {
           child: widget.isDel
               ? Icon(
                   Icons.backspace_outlined,
-                  color: Colors.white.withValues(alpha: 0.55),
+                  color: Colors.white.withValues(alpha: 0.7),
                   size: widget.fontSize + 2,
                 )
               : Text(
@@ -416,7 +404,9 @@ class _TeclaButtonState extends State<_TeclaButton> {
                   style: TextStyle(
                     fontSize: widget.fontSize,
                     fontWeight: FontWeight.w400,
-                    color: Colors.white.withValues(alpha: 0.9),
+                    color: _pressed
+                        ? const Color(0xFF0C6246)
+                        : Colors.white.withValues(alpha: 0.95),
                     letterSpacing: 0.5,
                   ),
                 ),

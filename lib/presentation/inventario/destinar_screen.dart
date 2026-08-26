@@ -155,13 +155,13 @@ class _DestinarScreenState extends State<DestinarScreen> {
     final cantidadTexto = _cantidadController.text.trim();
 
     if (destino.isEmpty) {
-      setState(() => _errorCantidad = 'Escribí un destino');
+      setState(() => _errorCantidad = 'Escribe un destino');
       return;
     }
 
     final cantidad = int.tryParse(cantidadTexto);
     if (cantidad == null || cantidad <= 0) {
-      setState(() => _errorCantidad = 'Ingresá una cantidad válida');
+      setState(() => _errorCantidad = 'Ingresa una cantidad válida');
       return;
     }
 
@@ -222,8 +222,6 @@ class _DestinarScreenState extends State<DestinarScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildAvisoLocal(),
-                    const SizedBox(height: 16),
                     _buildBuscador(),
                     if (_errorBusqueda != null) ...[
                       const SizedBox(height: 8),
@@ -257,30 +255,6 @@ class _DestinarScreenState extends State<DestinarScreen> {
     );
   }
 
-  Widget _buildAvisoLocal() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.withOpacity(0.3)),
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.info_outline, color: Colors.blue, size: 20),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Esta pantalla es solo una libreta de apartados. '
-              'No se sincroniza con Firebase y no modifica el stock real.',
-              style: TextStyle(fontSize: 12, color: Colors.blueGrey),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBuscador() {
     return Row(
       children: [
@@ -290,7 +264,6 @@ class _DestinarScreenState extends State<DestinarScreen> {
             decoration: const InputDecoration(
               labelText: 'Código o nombre de producto',
               border: OutlineInputBorder(),
-              hintText: 'Ej: 65123 u Oximed',
             ),
             onSubmitted: (_) => _buscarProducto(),
           ),
@@ -322,7 +295,7 @@ class _DestinarScreenState extends State<DestinarScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${_resultadosBusqueda.length} productos encontrados — elegí uno:',
+          '${_resultadosBusqueda.length} productos encontrados — elige uno:',
           style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
         ),
         const SizedBox(height: 6),
@@ -426,7 +399,6 @@ class _DestinarScreenState extends State<DestinarScreen> {
           controller: _destinoController,
           decoration: const InputDecoration(
             labelText: 'Destino',
-            hintText: 'Ej: Perú',
             border: OutlineInputBorder(),
           ),
         ),
@@ -437,7 +409,7 @@ class _DestinarScreenState extends State<DestinarScreen> {
           enabled: !sinDisponible,
           decoration: InputDecoration(
             labelText: 'Cantidad',
-            hintText: sinDisponible ? 'Sin disponible' : 'Ej: 3000',
+            hintText: sinDisponible ? 'Sin disponible' : null,
             border: const OutlineInputBorder(),
           ),
         ),
@@ -556,9 +528,7 @@ class _DestinarScreenState extends State<DestinarScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar apartado'),
         content: Text(
-          '¿Eliminar el apartado de ${a.cantidad} para "${a.destino}"?\n\n'
-          'Esto solo borra la anotación de este dispositivo. '
-          'No afecta el stock real ni Firebase.',
+          '¿Eliminar el apartado de ${a.cantidad} para "${a.destino}"?',
         ),
         actions: [
           TextButton(
