@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 import '../../core/data/data_master.dart';
+import '../../core/data/destinar_local_db.dart';
 
 class NuevoRetiroScreen extends StatefulWidget {
   const NuevoRetiroScreen({super.key});
@@ -23,6 +24,15 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   bool _guardando = false;
   String _error = '';
 
+  // ─────────────────────────────────────────────────────────
+  // AVISO DE "DESTINAR" — SOLO VISUAL
+  // No participa de ninguna validación ni del registro del retiro.
+  // Se lee de destinar_local_db.dart (base local aparte, sin relación
+  // con data_master.dart ni con el stock real).
+  // Mapa: destino -> cantidad total apartada para ese destino.
+  // ─────────────────────────────────────────────────────────
+  Map<String, int> _apartadosPorDestino = {};
+
   @override
   void dispose() {
     _nombreController.dispose();
@@ -36,6 +46,7 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
       _buscando = true;
       _buscado = false;
       _productoSeleccionado = null;
+      _apartadosPorDestino = {};
     });
 
     List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
@@ -68,7 +79,32 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
       _companeroController.clear();
       _cantidadController.clear();
       _error = '';
+      _apartadosPorDestino = {};
     });
+
+    // Lectura pura, no bloqueante para el flujo: si falla, simplemente
+    // no se muestra el aviso, pero el retiro sigue funcionando igual.
+    await _cargarApartados(data);
+  }
+
+  Future<void> _cargarApartados(Map<String, dynamic> data) async {
+    final codigo = data['codigo']?.toString() ?? '';
+    if (codigo.isEmpty) return;
+
+    try {
+      final apartados = await DestinarLocalDb.instance.obtenerPorCodigo(codigo);
+      final Map<String, int> agrupado = {};
+      for (final a in apartados) {
+        agrupado[a.destino] = (agrupado[a.destino] ?? 0) + a.cantidad;
+      }
+
+      // Si el usuario ya cambió de producto mientras esto cargaba, no pisar.
+      if (!mounted || _productoSeleccionado?['codigo'] != codigo) return;
+
+      setState(() => _apartadosPorDestino = agrupado);
+    } catch (_) {
+      // Aviso puramente informativo: cualquier error se ignora en silencio.
+    }
   }
 
   Future<void> _confirmar() async {
@@ -344,11 +380,21 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: () => setState(() {
                   _productoSeleccionado = null;
+                  _apartadosPorDestino = {};
                 }),
               ),
             ],
           ),
         ),
+
+        // ─────────────────────────────────────────────────────
+        // AVISO "DESTINAR" — solo aparece si hay apartados para
+        // este código. No bloquea nada, no valida nada, no toca
+        // stock. Al estar dentro del Column normal, empuja el
+        // resto del formulario hacia abajo automáticamente.
+        // ─────────────────────────────────────────────────────
+        if (_apartadosPorDestino.isNotEmpty) _buildAvisoApartados(),
+
         const SizedBox(height: 24),
 
         _buildLabel('COMPAÑERO (opcional)'),
@@ -406,6 +452,28 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildAvisoApartados() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: _apartadosPorDestino.entries.map((entry) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              'Hay ${entry.value} apartados para ${entry.key}',
+              style: const TextStyle(
+                color: Colors.deepOrange,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 

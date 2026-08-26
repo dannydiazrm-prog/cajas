@@ -25,6 +25,7 @@ import '../../presentation/inventario/ver_productos_screen.dart';
 import '../../presentation/inventario/reportes_screen.dart';
 import '../../presentation/inventario/control_stock_screen.dart';
 import '../../presentation/inventario/transferir_stock_screen.dart';
+import '../../presentation/inventario/destinar_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/pin',
@@ -145,6 +146,10 @@ final appRouter = GoRouter(
           path: 'transferir',
           builder: (context, state) => const TransferirStockScreen(),
         ),
+		GoRoute(
+        path: 'destinar',
+        builder: (context, state) => const DestinarScreen(),
+       ),
       ],
     ),
   ],

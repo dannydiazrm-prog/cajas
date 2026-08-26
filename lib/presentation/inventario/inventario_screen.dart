@@ -85,6 +85,12 @@ class _Body extends StatelessWidget {
       icon: Icons.swap_horiz_outlined,
       descripcion: 'Mover stock de un código a otro',
     ),
+	_MenuButton(
+  label: 'DESTINAR',
+  route: '/inventario/destinar',
+  icon: Icons.flag_outlined,
+  descripcion: 'Apartar stock por destino',
+),
   ];
 
   @override
