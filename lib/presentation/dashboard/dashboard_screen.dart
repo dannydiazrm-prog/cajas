@@ -52,13 +52,14 @@ class _Header extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: 20),
           GestureDetector(
             onTap: () => context.push('/perfil'),
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.25),
                   width: 1,
@@ -87,34 +88,35 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = !Breakpoints.isMobile(context);
-
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: isWide
-          ? GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 24,
-              mainAxisSpacing: 24,
-              childAspectRatio: 2.8,
-              children: buttons.map((b) => _buildButton(context, b)).toList(),
-            )
-          : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: buttons
-                  .map((b) => Padding(
-                        padding: const EdgeInsets.only(bottom: 20),
-                        child: _buildButton(context, b),
-                      ))
-                  .toList(),
+    // Grid con card de tamaño FIJO (no proporcional al ancho de pantalla).
+    // Esto evita que las cards se agranden en landscape mobile o en
+    // ventanas anchas de Windows: en vez de estirarse, el grid simplemente
+    // agrega más columnas si hay espacio disponible.
+    return Center(
+      child: ConstrainedBox(
+        // Tope de ancho total para que en Windows no quede una grilla
+        // gigante pegada a los bordes, sino un panel centrado y prolijo.
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: GridView.builder(
+            itemCount: buttons.length,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 320,
+              mainAxisExtent: 84,
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 20,
             ),
+            itemBuilder: (context, index) =>
+                _buildButton(context, buttons[index]),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildButton(BuildContext context, _MenuButton button) {
-    return SizedBox(
-      width: double.infinity,
-      height: 80,
+    return SizedBox.expand(
       child: ElevatedButton(
         onPressed: () => context.go(button.route),
         child: Text(
@@ -157,7 +159,7 @@ class _Footer extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: const [
           Text(
-            '07/2026',
+            '09/2026',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,

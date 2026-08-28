@@ -52,32 +52,13 @@ class _HistorialRecepcionesScreenState
   }
 
   Future<void> _ejecutarBusqueda() async {
-    List<Map<String, dynamic>> docs = await DataMaster().obtenerRecepciones();
+    final nombre = _nombreController.text.trim();
 
-    // Filtro por fecha
-    if (_desde != null) {
-      docs = docs.where((d) {
-        final fecha = _parseFecha(d['fecha']);
-        return fecha != null && !fecha.isBefore(_desde!);
-      }).toList();
-    }
-    if (_hasta != null) {
-      docs = docs.where((d) {
-        final fecha = _parseFecha(d['fecha']);
-        return fecha != null && !fecha.isAfter(_hasta!);
-      }).toList();
-    }
-
-    // Filtro por nombre
-    final nombre = _nombreController.text.trim().toLowerCase();
-    if (nombre.isNotEmpty) {
-      docs = docs.where((d) {
-        return (d['productoNombre'] ?? '')
-            .toString()
-            .toLowerCase()
-            .contains(nombre);
-      }).toList();
-    }
+    List<Map<String, dynamic>> docs = await DataMaster().obtenerRecepciones(
+      desde: _desde,
+      hasta: _hasta,
+      nombre: nombre.isNotEmpty ? nombre : null,
+    );
 
     // Orden descendente por fecha
     docs.sort((a, b) {
