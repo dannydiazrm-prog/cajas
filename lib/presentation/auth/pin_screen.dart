@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -78,29 +79,43 @@ class _PinScreenState extends State<PinScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0C6246), // mismo verde del logo
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _Header(),
-                  const SizedBox(height: 48),
-                  _PinIndicator(
-                    pinLength: _pin.length,
-                    shakeAnimation: _shakeAnimation,
-                    error: _error,
-                  ),
-                  const SizedBox(height: 40),
-                  if (_loading)
-                    const _LoadingIndicator()
-                  else
-                    _Teclado(onKey: _onKey, onBorrar: _borrar),
-                ],
+      backgroundColor: AppColors.primary,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0, -0.7),
+            radius: 1.5,
+            colors: [
+              Color(0xFF14795A), // primaryLight — halo superior
+              Color(0xFF0C6246), // primary (marca)
+              Color(0xFF052E20), // sombra profunda
+            ],
+            stops: [0.0, 0.55, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const _Header(),
+                    const SizedBox(height: 52),
+                    _PinIndicator(
+                      pinLength: _pin.length,
+                      shakeAnimation: _shakeAnimation,
+                      error: _error,
+                    ),
+                    const SizedBox(height: 40),
+                    if (_loading)
+                      const _LoadingIndicator()
+                    else
+                      _Teclado(onKey: _onKey, onBorrar: _borrar),
+                  ],
+                ),
               ),
             ),
           ),
@@ -113,38 +128,49 @@ class _PinScreenState extends State<PinScreen>
 // ─── HEADER ────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
+  const _Header();
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Logo sin contenedor: flota directo sobre el fondo, que ya
-        // comparte el mismo verde del logo.
-        SizedBox(
-          width: 96,
-          height: 96,
+        // Logo con glow suave detrás (no cambia la imagen, solo un halo)
+        Container(
+          width: 108,
+          height: 108,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withValues(alpha: 0.06),
+                blurRadius: 40,
+                spreadRadius: 6,
+              ),
+            ],
+          ),
           child: Image.asset(
             'assets/images/logo_galmedic.webp',
             fit: BoxFit.contain,
           ),
         ),
-        const SizedBox(height: 20),
-        const Text(
+        const SizedBox(height: 24),
+        Text(
           'GALMEDIC',
-          style: TextStyle(
+          style: GoogleFonts.inter(
             color: Colors.white,
             fontSize: 22,
             fontWeight: FontWeight.w700,
-            letterSpacing: 4,
+            letterSpacing: 5,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(
           'DEPÓSITO DE CAJAS',
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
+          style: GoogleFonts.inter(
+            color: Colors.white.withValues(alpha: 0.55),
             fontSize: 11,
             fontWeight: FontWeight.w500,
-            letterSpacing: 2.5,
+            letterSpacing: 3,
           ),
         ),
       ],
@@ -170,15 +196,15 @@ class _PinIndicator extends StatelessWidget {
     return Column(
       children: [
         Text(
-          'Ingresá tu PIN',
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.5),
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-            letterSpacing: 0.5,
+          'INGRESÁ TU PIN',
+          style: GoogleFonts.inter(
+            color: Colors.white.withValues(alpha: 0.55),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 2.5,
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 18),
         AnimatedBuilder(
           animation: shakeAnimation,
           builder: (context, child) {
@@ -190,54 +216,84 @@ class _PinIndicator extends StatelessWidget {
               child: child,
             );
           },
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(4, (i) {
-              final filled = i < pinLength;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutBack,
-                margin: const EdgeInsets.symmetric(horizontal: 10),
-                width: filled ? 18 : 14,
-                height: filled ? 18 : 14,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: filled ? Colors.white : Colors.transparent,
-                  border: Border.all(
-                    color: filled
-                        ? Colors.white
-                        : Colors.white.withValues(alpha: 0.35),
-                    width: 2,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.10),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(4, (i) {
+                final filled = i < pinLength;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutBack,
+                  margin: EdgeInsets.symmetric(horizontal: i == 3 ? 0 : 14),
+                  width: filled ? 20 : 16,
+                  height: filled ? 20 : 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: filled ? Colors.white : Colors.transparent,
+                    border: Border.all(
+                      color: filled
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.30),
+                      width: 1.8,
+                    ),
+                    boxShadow: filled
+                        ? [
+                            BoxShadow(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              blurRadius: 10,
+                              spreadRadius: 0,
+                            ),
+                          ]
+                        : null,
                   ),
-                  boxShadow: filled
-                      ? [
-                          BoxShadow(
-                            color: Colors.white.withValues(alpha: 0.4),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          )
-                        ]
-                      : null,
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 220),
           child: error.isNotEmpty
-              ? Text(
-                  error,
+              ? Container(
                   key: ValueKey(error),
-                  style: const TextStyle(
-                    color: Color(0xFFFF6B6B),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.3,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.40),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          color: AppColors.error, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        error,
+                        style: GoogleFonts.inter(
+                          color: AppColors.error,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
                   ),
                 )
-              : const SizedBox(height: 18),
+              : const SizedBox(height: 32),
         ),
       ],
     );
@@ -257,21 +313,22 @@ class _LoadingIndicator extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
-              width: 36,
-              height: 36,
+            const SizedBox(
+              width: 40,
+              height: 40,
               child: CircularProgressIndicator(
                 color: Colors.white,
                 strokeWidth: 2.5,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
-              'Verificando...',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 13,
-                letterSpacing: 0.5,
+              'VERIFICANDO',
+              style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.55),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 2.5,
               ),
             ),
           ],
@@ -291,10 +348,10 @@ class _Teclado extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Responsive: en pantallas anchas (desktop) los botones son un poco más grandes
     final isWide = MediaQuery.of(context).size.width > 600;
-    final btnSize = isWide ? 80.0 : 72.0;
-    final fontSize = isWide ? 22.0 : 20.0;
+    final btnSize = isWide ? 78.0 : 70.0;
+    final fontSize = isWide ? 22.0 : 21.0;
+    final gap = isWide ? 18.0 : 14.0;
 
     final teclas = [
       ['1', '2', '3'],
@@ -306,18 +363,16 @@ class _Teclado extends StatelessWidget {
     return Column(
       children: teclas.map((fila) {
         return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+          padding: EdgeInsets.only(bottom: gap),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: fila.map((tecla) {
               if (tecla.isEmpty) {
-                return SizedBox(width: btnSize + 16, height: btnSize);
+                return SizedBox(width: btnSize + gap, height: btnSize);
               }
-
               final isDel = tecla == 'DEL';
-
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: EdgeInsets.symmetric(horizontal: gap / 2),
                 child: _TeclaButton(
                   label: tecla,
                   isDel: isDel,
@@ -365,51 +420,57 @@ class _TeclaButtonState extends State<_TeclaButton> {
         widget.onTap();
       },
       onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedContainer(
+      child: AnimatedScale(
+        scale: _pressed ? 0.93 : 1.0,
         duration: const Duration(milliseconds: 100),
-        width: widget.size,
-        height: widget.size,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: _pressed
-              ? (widget.isDel
-                  ? Colors.white.withValues(alpha: 0.18)
-                  : Colors.white.withValues(alpha: 0.9))
-              : (widget.isDel
-                  ? Colors.white.withValues(alpha: 0.10)
-                  : Colors.white.withValues(alpha: 0.14)),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.14),
-            width: 1,
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _pressed
+                ? (widget.isDel
+                    ? Colors.white.withValues(alpha: 0.22)
+                    : Colors.white.withValues(alpha: 0.95))
+                : (widget.isDel
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.white.withValues(alpha: 0.12)),
+            border: Border.all(
+              color: Colors.white.withValues(
+                  alpha: widget.isDel ? 0.10 : 0.16),
+              width: 1,
+            ),
+            boxShadow: _pressed
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
           ),
-          boxShadow: _pressed
-              ? null
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.20),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
+          child: Center(
+            child: widget.isDel
+                ? Icon(
+                    Icons.backspace_outlined,
+                    color: Colors.white.withValues(alpha: 0.75),
+                    size: widget.fontSize + 2,
+                  )
+                : Text(
+                    widget.label,
+                    style: GoogleFonts.inter(
+                      fontSize: widget.fontSize,
+                      fontWeight: FontWeight.w500,
+                      color: _pressed
+                          ? AppColors.primary
+                          : Colors.white,
+                      letterSpacing: 0,
+                    ),
                   ),
-                ],
-        ),
-        child: Center(
-          child: widget.isDel
-              ? Icon(
-                  Icons.backspace_outlined,
-                  color: Colors.white.withValues(alpha: 0.7),
-                  size: widget.fontSize + 2,
-                )
-              : Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: widget.fontSize,
-                    fontWeight: FontWeight.w400,
-                    color: _pressed
-                        ? const Color(0xFF0C6246)
-                        : Colors.white.withValues(alpha: 0.95),
-                    letterSpacing: 0.5,
-                  ),
-                ),
+          ),
         ),
       ),
     );
