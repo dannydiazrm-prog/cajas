@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
 
@@ -25,10 +26,14 @@ class RetiradosScreen extends StatelessWidget {
   }
 }
 
+// ─── HEADER ────────────────────────────────────────────────────────────────
+
 class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
+    final isMobile = Breakpoints.isMobile(context);
+
     return Container(
       color: AppColors.primary,
       padding: EdgeInsets.only(
@@ -40,15 +45,15 @@ class _Header extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
             onPressed: () => context.go('/'),
           ),
           const SizedBox(width: 8),
           Text(
             'RETIRADOS',
-            style: TextStyle(
+            style: GoogleFonts.inter(
               color: Colors.white,
-              fontSize: Breakpoints.isMobile(context) ? 20 : 28,
+              fontSize: isMobile ? 20 : 28,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.2,
             ),
@@ -59,8 +64,12 @@ class _Header extends StatelessWidget {
   }
 }
 
+// ─── BODY ──────────────────────────────────────────────────────────────────
+
 class _Body extends StatelessWidget {
-  final List<_MenuButton> buttons = const [
+  const _Body();
+
+  static const List<_MenuButton> _buttons = [
     _MenuButton(
       label: 'NUEVO RETIRO',
       route: '/retirados/nuevo',
@@ -79,61 +88,132 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     final isWide = !Breakpoints.isMobile(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: isWide
-          ? GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 24,
-              mainAxisSpacing: 24,
-              childAspectRatio: 2.8,
-              children: buttons.map((b) => _buildButton(context, b)).toList(),
-            )
-          : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: buttons
-                  .map((b) => Padding(
-                        padding: const EdgeInsets.only(bottom: 20),
-                        child: _buildButton(context, b),
-                      ))
-                  .toList(),
-            ),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: isWide
+              ? GridView.builder(
+                  itemCount: _buttons.length,
+                  gridDelegate:
+                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 340,
+                    mainAxisExtent: 92,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemBuilder: (context, index) =>
+                      _MenuCard(button: _buttons[index]),
+                )
+              : ListView.separated(
+                  itemCount: _buttons.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 16),
+                  itemBuilder: (context, index) =>
+                      _MenuCard(button: _buttons[index]),
+                ),
+        ),
+      ),
     );
   }
+}
 
-  Widget _buildButton(BuildContext context, _MenuButton button) {
-    return SizedBox(
-      width: double.infinity,
-      height: 80,
-      child: ElevatedButton(
-        onPressed: () => context.push(button.route),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(button.icon, size: 28),
-            const SizedBox(width: 12),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  button.label,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                Text(
-                  button.descripcion,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
+class _MenuCard extends StatefulWidget {
+  final _MenuButton button;
+  const _MenuCard({required this.button});
+
+  @override
+  State<_MenuCard> createState() => _MenuCardState();
+}
+
+class _MenuCardState extends State<_MenuCard> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        context.push(widget.button.route);
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: _pressed ? AppColors.surfaceAlt : AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _pressed ? AppColors.primary : AppColors.border,
+              width: 1.2,
             ),
-          ],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: _pressed ? 0.02 : 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  widget.button.icon,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.button.label,
+                      style: GoogleFonts.inter(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      widget.button.descripcion,
+                      style: GoogleFonts.inter(
+                        color: AppColors.textDim,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textDim,
+                size: 22,
+              ),
+            ],
+          ),
         ),
       ),
     );

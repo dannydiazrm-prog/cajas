@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/data/data_master.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/breakpoints.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
@@ -70,22 +71,14 @@ class _PerfilScreenState extends State<PerfilScreen> {
       if (actual != pinGuardado) {
         setState(() => _mensaje = 'PIN actual incorrecto');
       } else {
-        // Guardar localmente
         await DataMaster().guardarConfig('pin', nuevo);
 
-        // Subir a Firestore inmediatamente — el PIN no espera sincronización
         try {
           await FirebaseFirestore.instance
               .collection('config')
               .doc('pin')
               .set({'valor': nuevo});
-        } catch (_) {
-          // Sin internet: quedó guardado en SQLite.
-          // La próxima sincronización no lo sube automáticamente
-          // porque config no tiene flag sincronizado, pero al
-          // reconectarse _descargarConfig lo bajará desde Firestore.
-          // Si el operario reinstala sin haber tenido red, usará 1234.
-        }
+        } catch (_) {}
 
         setState(() => _mensaje = 'PIN actualizado correctamente');
         _pinActualController.clear();
@@ -130,34 +123,37 @@ class _PerfilScreenState extends State<PerfilScreen> {
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text(
+        title: Text(
           'GESTIÓN DE DATOS',
-          style: TextStyle(
+          style: GoogleFonts.inter(
             color: AppColors.primary,
             fontWeight: FontWeight.w900,
             fontSize: 16,
+            letterSpacing: 1.0,
           ),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
+            Text(
               'Ingresa tu PIN para continuar',
-              style: TextStyle(color: Colors.grey),
+              style: GoogleFonts.inter(
+                color: AppColors.textBody,
+                fontSize: 14,
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
-        style: const TextStyle(color: Color(0xFF0c6246)),
+              style: GoogleFonts.inter(
+                color: AppColors.textPrimary,
+                fontSize: 16,
+                letterSpacing: 4,
+              ),
               keyboardType: TextInputType.number,
               maxLength: 4,
               obscureText: true,
               decoration: InputDecoration(
                 hintText: '****',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
                 counterText: '',
               ),
               onChanged: (v) => pin = v,
@@ -167,17 +163,17 @@ class _PerfilScreenState extends State<PerfilScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.inter(
+                color: AppColors.textBody,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'ENTRAR',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('ENTRAR'),
           ),
         ],
       ),
@@ -190,10 +186,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
     if (pin != pinGuardado) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('PIN incorrecto'),
-            backgroundColor: Colors.red,
-          ),
+          const SnackBar(content: Text('PIN incorrecto')),
         );
       }
       return;
@@ -218,107 +211,25 @@ class _PerfilScreenState extends State<PerfilScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // SECCIÓN SINCRONIZACIÓN
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _pendientes > 0
-                                ? Colors.orange
-                                : AppColors.primary.withValues(alpha: 0.3),
-                            width: _pendientes > 0 ? 2 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  _pendientes > 0
-                                      ? Icons.cloud_upload_outlined
-                                      : Icons.cloud_done_outlined,
-                                  color: _pendientes > 0
-                                      ? Colors.orange
-                                      : AppColors.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _pendientes > 0
-                                        ? '$_pendientes registro${_pendientes != 1 ? 's' : ''} pendiente${_pendientes != 1 ? 's' : ''} de sincronizar'
-                                        : 'Todo sincronizado con Firebase',
-                                    style: TextStyle(
-                                      color: _pendientes > 0
-                                          ? Colors.orange
-                                          : AppColors.primary,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_estadoSync.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                _estadoSync,
-                                style: TextStyle(
-                                  color: _estadoSync.contains('Error')
-                                      ? Colors.red
-                                      : Colors.green,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 48,
-                              child: ElevatedButton.icon(
-                                onPressed:
-                                    _sincronizando ? null : _sincronizar,
-                                icon: _sincronizando
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.sync),
-                                label: Text(
-                                  _sincronizando
-                                      ? 'SINCRONIZANDO...'
-                                      : 'SINCRONIZAR CON FIREBASE',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.1,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      _SyncCard(
+                        pendientes: _pendientes,
+                        estadoSync: _estadoSync,
+                        sincronizando: _sincronizando,
+                        onSync: _sincronizar,
                       ),
                       const SizedBox(height: 32),
 
                       // SECCIÓN CAMBIAR PIN
-                      const Text(
+                      Text(
                         'CAMBIAR PIN',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 16,
+                        style: GoogleFonts.inter(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
+                          letterSpacing: 1.5,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       _buildCampoPin(
                         controller: _pinActualController,
                         label: 'PIN actual',
@@ -342,45 +253,28 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         onToggle: () =>
                             setState(() => _ocultarConfirm = !_ocultarConfirm),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       if (_mensaje.isNotEmpty)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: _mensaje.contains('correctamente')
-                                ? Colors.green.withValues(alpha: 0.1)
-                                : Colors.red.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: _mensaje.contains('correctamente')
-                                  ? Colors.green
-                                  : Colors.red,
-                            ),
-                          ),
-                          child: Text(
-                            _mensaje,
-                            style: TextStyle(
-                              color: _mensaje.contains('correctamente')
-                                  ? Colors.green
-                                  : Colors.red,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 24),
+                        _MensajeBox(mensaje: _mensaje),
+                      const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
                           onPressed: _loading ? null : _cambiarPin,
                           child: _loading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.white)
-                              : const Text(
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
                                   'GUARDAR NUEVO PIN',
-                                  style: TextStyle(
-                                    fontSize: 16,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.2,
                                   ),
@@ -395,22 +289,23 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         height: 56,
                         child: OutlinedButton.icon(
                           onPressed: _cerrarSesion,
-                          icon: const Icon(Icons.logout,
-                              color: AppColors.primary),
-                          label: const Text(
+                          icon: const Icon(Icons.logout, size: 20),
+                          label: Text(
                             'CERRAR SESIÓN',
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 16,
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
                             ),
                           ),
                           style: OutlinedButton.styleFrom(
-                            side:
-                                const BorderSide(color: AppColors.primary),
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(
+                              color: AppColors.primary,
+                              width: 1.4,
+                            ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
                         ),
@@ -428,6 +323,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   Widget _buildHeader(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
+    final isMobile = Breakpoints.isMobile(context);
+
     return Container(
       color: AppColors.primary,
       padding: EdgeInsets.only(
@@ -439,23 +336,23 @@ class _PerfilScreenState extends State<PerfilScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
             onPressed: () => context.go('/'),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'PERFIL',
-              style: TextStyle(
+              style: GoogleFonts.inter(
                 color: Colors.white,
-                fontSize: Breakpoints.isMobile(context) ? 20 : 28,
+                fontSize: isMobile ? 20 : 28,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.2,
               ),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.settings, color: Colors.white, size: 20),
+            icon: const Icon(Icons.settings, color: Colors.white, size: 22),
             onPressed: () => _accederGestionDatos(context),
           ),
         ],
@@ -470,25 +367,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
     required VoidCallback onToggle,
   }) {
     return TextField(
-      style: const TextStyle(color: Color(0xFF0c6246)),
+      style: GoogleFonts.inter(
+        color: AppColors.textPrimary,
+        fontSize: 16,
+        letterSpacing: 4,
+        fontWeight: FontWeight.w600,
+      ),
       controller: controller,
       obscureText: ocultar,
       keyboardType: TextInputType.number,
       maxLength: 4,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: AppColors.primary),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppColors.primary, width: 2),
-        ),
         suffixIcon: IconButton(
           icon: Icon(
             ocultar ? Icons.visibility_off : Icons.visibility,
@@ -497,6 +387,185 @@ class _PerfilScreenState extends State<PerfilScreen> {
           onPressed: onToggle,
         ),
         counterText: '',
+      ),
+    );
+  }
+}
+
+// ─── SYNC CARD ─────────────────────────────────────────────────────────────
+
+class _SyncCard extends StatelessWidget {
+  final int pendientes;
+  final String estadoSync;
+  final bool sincronizando;
+  final Future<void> Function() onSync;
+
+  const _SyncCard({
+    required this.pendientes,
+    required this.estadoSync,
+    required this.sincronizando,
+    required this.onSync,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hayPendientes = pendientes > 0;
+    final color = hayPendientes ? AppColors.warning : AppColors.primary;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: hayPendientes
+              ? AppColors.warning.withValues(alpha: 0.6)
+              : AppColors.border,
+          width: hayPendientes ? 1.6 : 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  hayPendientes
+                      ? Icons.cloud_upload_outlined
+                      : Icons.cloud_done_outlined,
+                  color: color,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  hayPendientes
+                      ? '$pendientes registro${pendientes != 1 ? 's' : ''} pendiente${pendientes != 1 ? 's' : ''} de sincronizar'
+                      : 'Todo sincronizado con Firebase',
+                  style: GoogleFonts.inter(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    height: 1.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (estadoSync.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: (estadoSync.contains('Error')
+                        ? AppColors.error
+                        : AppColors.success)
+                    .withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                estadoSync,
+                style: GoogleFonts.inter(
+                  color: estadoSync.contains('Error')
+                      ? AppColors.error
+                      : AppColors.success,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: sincronizando ? null : onSync,
+              icon: sincronizando
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.sync, size: 20),
+              label: Text(
+                sincronizando
+                    ? 'SINCRONIZANDO...'
+                    : 'SINCRONIZAR CON FIREBASE',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── MENSAJE BOX ───────────────────────────────────────────────────────────
+
+class _MensajeBox extends StatelessWidget {
+  final String mensaje;
+  const _MensajeBox({required this.mensaje});
+
+  @override
+  Widget build(BuildContext context) {
+    final esExito = mensaje.contains('correctamente');
+    final color = esExito ? AppColors.success : AppColors.error;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            esExito ? Icons.check_circle_outline : Icons.error_outline,
+            color: color,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              mensaje,
+              style: GoogleFonts.inter(
+                color: color,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
