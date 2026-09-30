@@ -116,6 +116,7 @@ class DataMaster {
       )
     ''');
 
+await db.execute('''
     CREATE TABLE recepciones (
         id TEXT PRIMARY KEY,
         productoId TEXT NOT NULL,
