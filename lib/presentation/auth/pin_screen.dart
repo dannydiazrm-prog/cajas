@@ -79,43 +79,31 @@ class _PinScreenState extends State<PinScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Fondo plano exactamente del mismo verde que el logo.
+      // Sin gradiente → el logo se camufla perfecto.
       backgroundColor: AppColors.primary,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.7),
-            radius: 1.5,
-            colors: [
-              Color(0xFF14795A), // primaryLight — halo superior
-              Color(0xFF0C6246), // primary (marca)
-              Color(0xFF052E20), // sombra profunda
-            ],
-            stops: [0.0, 0.55, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const _Header(),
-                    const SizedBox(height: 52),
-                    _PinIndicator(
-                      pinLength: _pin.length,
-                      shakeAnimation: _shakeAnimation,
-                      error: _error,
-                    ),
-                    const SizedBox(height: 40),
-                    if (_loading)
-                      const _LoadingIndicator()
-                    else
-                      _Teclado(onKey: _onKey, onBorrar: _borrar),
-                  ],
-                ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const _Header(),
+                  const SizedBox(height: 24),
+                  _PinIndicator(
+                    pinLength: _pin.length,
+                    shakeAnimation: _shakeAnimation,
+                    error: _error,
+                  ),
+                  const SizedBox(height: 24),
+                  if (_loading)
+                    const _LoadingIndicator()
+                  else
+                    _Teclado(onKey: _onKey, onBorrar: _borrar),
+                ],
               ),
             ),
           ),
@@ -134,26 +122,15 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Logo con glow suave detrás (no cambia la imagen, solo un halo)
-        Container(
-          width: 108,
-          height: 108,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.white.withValues(alpha: 0.06),
-                blurRadius: 40,
-                spreadRadius: 6,
-              ),
-            ],
-          ),
+        SizedBox(
+          width: 88,
+          height: 88,
           child: Image.asset(
             'assets/images/logo_galmedic.webp',
             fit: BoxFit.contain,
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 18),
         Text(
           'GALMEDIC',
           style: GoogleFonts.inter(
@@ -163,7 +140,7 @@ class _Header extends StatelessWidget {
             letterSpacing: 5,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
           'DEPÓSITO DE CAJAS',
           style: GoogleFonts.inter(
@@ -196,7 +173,7 @@ class _PinIndicator extends StatelessWidget {
     return Column(
       children: [
         Text(
-          'INGRESÁ TU PIN',
+          'INGRESA TU PIN',
           style: GoogleFonts.inter(
             color: Colors.white.withValues(alpha: 0.55),
             fontSize: 11,
@@ -204,7 +181,7 @@ class _PinIndicator extends StatelessWidget {
             letterSpacing: 2.5,
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
         AnimatedBuilder(
           animation: shakeAnimation,
           builder: (context, child) {
@@ -217,10 +194,10 @@ class _PinIndicator extends StatelessWidget {
             );
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.10),
                 width: 1,
@@ -233,9 +210,9 @@ class _PinIndicator extends StatelessWidget {
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutBack,
-                  margin: EdgeInsets.symmetric(horizontal: i == 3 ? 0 : 14),
-                  width: filled ? 20 : 16,
-                  height: filled ? 20 : 16,
+                  margin: EdgeInsets.symmetric(horizontal: i == 3 ? 0 : 12),
+                  width: filled ? 18 : 14,
+                  height: filled ? 18 : 14,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: filled ? Colors.white : Colors.transparent,
@@ -243,13 +220,13 @@ class _PinIndicator extends StatelessWidget {
                       color: filled
                           ? Colors.white
                           : Colors.white.withValues(alpha: 0.30),
-                      width: 1.8,
+                      width: 1.6,
                     ),
                     boxShadow: filled
                         ? [
                             BoxShadow(
                               color: Colors.white.withValues(alpha: 0.35),
-                              blurRadius: 10,
+                              blurRadius: 8,
                               spreadRadius: 0,
                             ),
                           ]
@@ -260,7 +237,7 @@ class _PinIndicator extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),
           child: error.isNotEmpty
@@ -293,7 +270,7 @@ class _PinIndicator extends StatelessWidget {
                     ],
                   ),
                 )
-              : const SizedBox(height: 32),
+              : const SizedBox(height: 28),
         ),
       ],
     );
@@ -308,20 +285,20 @@ class _LoadingIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 320, // misma altura aprox que el teclado
+      height: 260,
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const SizedBox(
-              width: 40,
-              height: 40,
+              width: 36,
+              height: 36,
               child: CircularProgressIndicator(
                 color: Colors.white,
                 strokeWidth: 2.5,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             Text(
               'VERIFICANDO',
               style: GoogleFonts.inter(
@@ -349,9 +326,9 @@ class _Teclado extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 600;
-    final btnSize = isWide ? 78.0 : 70.0;
-    final fontSize = isWide ? 22.0 : 21.0;
-    final gap = isWide ? 18.0 : 14.0;
+    final btnSize = isWide ? 64.0 : 58.0;
+    final fontSize = isWide ? 20.0 : 19.0;
+    final gap = isWide ? 12.0 : 10.0;
 
     final teclas = [
       ['1', '2', '3'],
@@ -446,9 +423,9 @@ class _TeclaButtonState extends State<_TeclaButton> {
                 ? null
                 : [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.18),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
                     ),
                   ],
           ),
@@ -464,9 +441,7 @@ class _TeclaButtonState extends State<_TeclaButton> {
                     style: GoogleFonts.inter(
                       fontSize: widget.fontSize,
                       fontWeight: FontWeight.w500,
-                      color: _pressed
-                          ? AppColors.primary
-                          : Colors.white,
+                      color: _pressed ? AppColors.primary : Colors.white,
                       letterSpacing: 0,
                     ),
                   ),
