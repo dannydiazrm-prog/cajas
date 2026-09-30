@@ -569,6 +569,8 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 6),
+                _buildDesgloseFabricante(id),
               ],
             ),
           ),
@@ -582,6 +584,27 @@ class _VerProductosScreenState extends State<VerProductosScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDesgloseFabricante(String productoId) {
+    return FutureBuilder<Map<String, int>>(
+      future: DataMaster().obtenerStockPorFabricante(productoId),
+      builder: (context, snapshot) {
+        final datos = snapshot.data ?? {};
+        final srl = datos['SRL'] ?? 0;
+        final sa = datos['SA'] ?? 0;
+
+        if (srl == 0 && sa == 0) return const SizedBox.shrink();
+
+        return Wrap(
+          spacing: 8,
+          children: [
+            if (srl > 0) _buildTag('SRL: $srl', color: Colors.blueGrey),
+            if (sa > 0) _buildTag('SA: $sa', color: Colors.teal),
+          ],
+        );
+      },
     );
   }
 

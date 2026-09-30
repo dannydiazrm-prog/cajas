@@ -21,6 +21,10 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
   final _cantidadController = TextEditingController();
   bool _guardando = false;
 
+  // Fabricante del lote: 'SRL' (Galmedic) o 'SA' (Corporación Biotécnica).
+  // Se reinicia cada vez que se expande un producto distinto.
+  String _fabricante = 'SRL';
+
   @override
   void dispose() {
     _nombreController.dispose();
@@ -61,7 +65,10 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
       return;
     }
     _cantidadController.clear();
-    setState(() => _expandidoId = id);
+    setState(() {
+      _expandidoId = id;
+      _fabricante = 'SRL'; // valor por defecto al abrir cada producto
+    });
   }
 
   Future<void> _confirmar(Map<String, dynamic> data) async {
@@ -100,6 +107,7 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
         codigo: codigo,
         destinoClave: 'general',
         destinos: ['general'],
+        fabricante: _fabricante,
       );
 
       setState(() {
@@ -327,6 +335,18 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
+                    'ELABORADO POR',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildFabricanteSelector(),
+                  const SizedBox(height: 20),
+                  const Text(
                     'CANTIDAD EXISTENTE',
                     style: TextStyle(
                       color: AppColors.primary,
@@ -381,6 +401,79 @@ class _CargaInicialScreenState extends State<CargaInicialScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildFabricanteSelector() {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildFabricanteOpcion(
+            valor: 'SRL',
+            label: 'Galmedic',
+            sublabel: 'SRL',
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _buildFabricanteOpcion(
+            valor: 'SA',
+            label: 'Corporación Biotécnica',
+            sublabel: 'SA',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFabricanteOpcion({
+    required String valor,
+    required String label,
+    required String sublabel,
+  }) {
+    final seleccionado = _fabricante == valor;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => setState(() => _fabricante = valor),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: seleccionado
+              ? AppColors.primary
+              : AppColors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: seleccionado
+                ? AppColors.primary
+                : AppColors.primary.withValues(alpha: 0.25),
+            width: seleccionado ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: seleccionado ? Colors.white : AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              sublabel,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: seleccionado
+                    ? Colors.white.withValues(alpha: 0.85)
+                    : AppColors.primary.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

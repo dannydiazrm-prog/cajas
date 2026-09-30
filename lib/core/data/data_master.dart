@@ -29,7 +29,7 @@ class DataMaster {
     final path = join(dir.path, 'galmedic.db');
     return openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _crearTablas,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -55,6 +55,10 @@ class DataMaster {
         if (oldVersion < 6) {
           await db.execute(
               "ALTER TABLE productos ADD COLUMN codigo TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 7) {
+          await db.execute(
+              "ALTER TABLE recepciones ADD COLUMN fabricante TEXT NOT NULL DEFAULT ''");
         }
       },
     );
@@ -112,8 +116,7 @@ class DataMaster {
       )
     ''');
 
-    await db.execute('''
-      CREATE TABLE recepciones (
+    CREATE TABLE recepciones (
         id TEXT PRIMARY KEY,
         productoId TEXT NOT NULL,
         productoNombre TEXT NOT NULL,
@@ -126,6 +129,7 @@ class DataMaster {
         destinos TEXT NOT NULL DEFAULT '[]',
         fecha TEXT NOT NULL,
         esCargaInicial INTEGER NOT NULL DEFAULT 0,
+        fabricante TEXT NOT NULL DEFAULT '',
         sincronizado INTEGER NOT NULL DEFAULT 0
       )
     ''');
@@ -330,6 +334,7 @@ class DataMaster {
           'destinoClave': data['destinoClave'] ?? '',
           'destinos': jsonEncode(data['destinos'] ?? []),
           'esCargaInicial': (data['esCargaInicial'] == true) ? 1 : 0,
+          'fabricante': data['fabricante'] ?? '',
           'fecha': data['fecha']?.toDate()?.toIso8601String() ?? DateTime.now().toIso8601String(),
           'sincronizado': 1,
         },
@@ -660,6 +665,7 @@ class DataMaster {
     required String codigo,
     required String destinoClave,
     required List<String> destinos,
+    required String fabricante,
   }) async {
     final database = await db;
     final id = 'local_${DateTime.now().millisecondsSinceEpoch}';
@@ -680,6 +686,7 @@ class DataMaster {
         'destinos': jsonEncode(destinos),
         'fecha': fecha,
         'esCargaInicial': 0,
+        'fabricante': fabricante,
         'sincronizado': 0,
       });
     });
@@ -698,13 +705,14 @@ class DataMaster {
     required String codigo,
     required String destinoClave,
     required List<String> destinos,
+    required String fabricante,
   }) async {
     final database = await db;
     final id = 'local_${DateTime.now().millisecondsSinceEpoch}';
     final fecha = DateTime.now().toIso8601String();
 
     await database.transaction((txn) async {
-      await txn.insert('recepciones', {
+   await txn.insert('recepciones', {
         'id': id,
         'productoId': productoId,
         'productoNombre': productoNombre,
@@ -717,6 +725,7 @@ class DataMaster {
         'destinos': jsonEncode(destinos),
         'fecha': fecha,
         'esCargaInicial': 1,
+        'fabricante': fabricante,
         'sincronizado': 0,
       });
     });
@@ -1179,6 +1188,29 @@ combinaciones[clave] = {
     return resultado;
   }
 
+  /// Stock real de un producto, desglosado por fabricante (SRL/SA).
+  /// Solo lectura: no modifica cantidadActual ni ninguna otra tabla.
+  Future<Map<String, int>> obtenerStockPorFabricante(String productoId) async {
+    final database = await db;
+    final recepciones = await database.query(
+      'recepciones',
+      where: 'productoId = ?',
+      whereArgs: [productoId],
+    );
+
+    final Map<String, int> resultado = {};
+
+    for (final r in recepciones) {
+      final fabricante = (r['fabricante'] ?? '').toString();
+      final cantidadActual = (r['cantidadActual'] as num?)?.toInt() ?? 0;
+      if (fabricante.isEmpty || cantidadActual == 0) continue;
+
+      resultado[fabricante] = (resultado[fabricante] ?? 0) + cantidadActual;
+    }
+
+    return resultado;
+  }
+
   Future<void> _agregarPrefijo(String prefijo) async {
     final usados = await obtenerPrefijosUsados();
     if (!usados.contains(prefijo)) {
@@ -1430,6 +1462,7 @@ combinaciones[clave] = {
         'destinoClave': row['destinoClave'],
         'destinos': jsonDecode(row['destinos'] as String),
         'esCargaInicial': row['esCargaInicial'] == 1,
+        'fabricante': row['fabricante'],
         'fecha': row['fecha'],
       });
 
