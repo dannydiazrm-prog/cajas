@@ -832,6 +832,18 @@ combinaciones[clave] = {
     return combinaciones.values.toList();
   }
 
+Future<List<String>> obtenerRecepcionIdsPorFabricante(
+    String productoId, String fabricante) async {
+  final database = await db;
+  final rows = await database.query(
+    'recepciones',
+    where: 'productoId = ? AND fabricante = ? AND cantidadActual > 0',
+    whereArgs: [productoId, fabricante],
+    orderBy: 'fecha ASC',
+  );
+  return rows.map((r) => r['id'] as String).toList();
+}
+
   // ─────────────────────────────────────────
   // RETIROS
   // ─────────────────────────────────────────

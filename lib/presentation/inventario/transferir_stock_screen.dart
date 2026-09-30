@@ -12,24 +12,24 @@ class TransferirStockScreen extends StatefulWidget {
 }
 
 class _TransferirStockScreenState extends State<TransferirStockScreen> {
-  // Búsqueda origen
   final _busquedaOrigenController = TextEditingController();
   Map<String, dynamic>? _productoOrigen;
   List<Map<String, dynamic>> _resultadosOrigen = [];
   bool _buscandoOrigen = false;
   bool _buscadoOrigen = false;
 
-  // Búsqueda destino
   final _busquedaDestinoController = TextEditingController();
   Map<String, dynamic>? _productoDestino;
   List<Map<String, dynamic>> _resultadosDestino = [];
   bool _buscandoDestino = false;
   bool _buscadoDestino = false;
 
-  // Cantidad
   final _cantidadController = TextEditingController();
   bool _guardando = false;
   String _error = '';
+
+  Map<String, int> _fabricantesOrigen = {};
+  String? _fabricanteSeleccionado;
 
   @override
   void dispose() {
@@ -44,6 +44,8 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
       _buscandoOrigen = true;
       _buscadoOrigen = false;
       _productoOrigen = null;
+      _fabricanteSeleccionado = null;
+      _fabricantesOrigen = {};
     });
 
     List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
@@ -90,11 +92,8 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
       }).toList();
     }
 
-    // Excluir el producto origen
     if (_productoOrigen != null) {
-      docs = docs
-          .where((d) => d['id'] != _productoOrigen!['id'])
-          .toList();
+      docs = docs.where((d) => d['id'] != _productoOrigen!['id']).toList();
     }
 
     setState(() {
@@ -111,6 +110,10 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
       setState(() => _error = 'Seleccioná el producto origen');
       return;
     }
+    if (_fabricanteSeleccionado == null) {
+      setState(() => _error = 'Seleccioná un fabricante');
+      return;
+    }
     if (_productoDestino == null) {
       setState(() => _error = 'Seleccioná el producto destino');
       return;
@@ -120,11 +123,10 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
       return;
     }
 
-    final stockDisponible =
-        (_productoOrigen!['stockActual'] as num?)?.toInt() ?? 0;
-    if (cantidad > stockDisponible) {
-      setState(() =>
-          _error = 'Stock insuficiente en origen. Disponible: $stockDisponible');
+    final stockFab = _fabricantesOrigen[_fabricanteSeleccionado] ?? 0;
+    if (cantidad > stockFab) {
+      setState(() => _error =
+          'Stock insuficiente de $_fabricanteSeleccionado. Disponible: $stockFab');
       return;
     }
 
@@ -134,14 +136,9 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
     });
 
     try {
-      // 1 — Restar del origen
-      final combinacionesOrigen = await DataMaster()
-          .obtenerCombinacionesRecepcion(_productoOrigen!['id'].toString());
-
-      final recepcionIdsOrigen = combinacionesOrigen
-          .expand(
-              (c) => List<String>.from(c['recepcionIds'] as List? ?? []))
-          .toList();
+      final recepcionIdsOrigen = await DataMaster()
+          .obtenerRecepcionIdsPorFabricante(
+              _productoOrigen!['id'].toString(), _fabricanteSeleccionado!);
 
       await DataMaster().registrarAjuste(
         tipo: 'ajuste_manual',
@@ -152,12 +149,11 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
         idioma: _productoOrigen!['idioma']?.toString() ?? '',
         cantidad: cantidad,
         motivo:
-            'Transferencia a código ${_productoDestino!['codigo'] ?? _productoDestino!['nombre']}',
+            'Transferencia a código ${_productoDestino!['codigo'] ?? _productoDestino!['nombre']} ($_fabricanteSeleccionado)',
         destinosIds: ['general'],
         recepcionIds: recepcionIdsOrigen,
       );
 
-      // 2 — Sumar al destino
       await DataMaster().registrarRecepcion(
         productoId: _productoDestino!['id'].toString(),
         productoNombre: _productoDestino!['nombre'] ?? '',
@@ -167,13 +163,14 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
         codigo: _productoDestino!['codigo']?.toString() ?? '',
         destinoClave: 'general',
         destinos: ['general'],
+        fabricante: _fabricanteSeleccionado!,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                '$cantidad unidades transferidas a ${_productoDestino!['nombre']}'),
+                '$cantidad unidades ($_fabricanteSeleccionado) transferidas a ${_productoDestino!['nombre']}'),
             backgroundColor: AppColors.primary,
           ),
         );
@@ -200,7 +197,6 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ORIGEN
                     _buildSeccion(
                       titulo: 'PRODUCTO ORIGEN',
                       subtitulo: 'El stock se va a descontar de acá',
@@ -210,34 +206,72 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
                       buscando: _buscandoOrigen,
                       buscado: _buscadoOrigen,
                       onBuscar: _buscarOrigen,
-                      onSeleccionar: (data) => setState(() {
-                        _productoOrigen = data;
-                        _resultadosOrigen = [];
-                        _buscadoOrigen = false;
-                        _busquedaOrigenController.clear();
-                        _error = '';
-                      }),
+                      onSeleccionar: (data) async {
+                        setState(() {
+                          _productoOrigen = data;
+                          _fabricanteSeleccionado = null;
+                          _fabricantesOrigen = {};
+                          _resultadosOrigen = [];
+                          _buscadoOrigen = false;
+                          _busquedaOrigenController.clear();
+                          _error = '';
+                        });
+                        final fab = await DataMaster()
+                            .obtenerStockPorFabricante(data['id'].toString());
+                        if (mounted) setState(() => _fabricantesOrigen = fab);
+                      },
                       onCambiar: () => setState(() {
                         _productoOrigen = null;
+                        _fabricanteSeleccionado = null;
+                        _fabricantesOrigen = {};
                         _error = '';
                       }),
                     ),
-                    const SizedBox(height: 24),
 
-                    // Flecha visual
-                    if (_productoOrigen != null)
-                      const Center(
-                        child: Icon(
-                          Icons.arrow_downward,
+                    if (_productoOrigen != null && _fabricantesOrigen.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      const Text(
+                        'FABRICANTE A TRANSFERIR',
+                        style: TextStyle(
                           color: AppColors.primary,
-                          size: 32,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: _fabricantesOrigen.entries.map((e) {
+                          final seleccionado = _fabricanteSeleccionado == e.key;
+                          return ChoiceChip(
+                            label: Text('${e.key}: ${e.value}'),
+                            selected: seleccionado,
+                            selectedColor:
+                                AppColors.primary.withValues(alpha: 0.2),
+                            onSelected: (_) => setState(() {
+                              _fabricanteSeleccionado = e.key;
+                              _cantidadController.clear();
+                              _error = '';
+                            }),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+
+                    if (_productoOrigen != null && _fabricanteSeleccionado != null)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Icon(
+                            Icons.arrow_downward,
+                            color: AppColors.primary,
+                            size: 32,
+                          ),
                         ),
                       ),
 
-                    if (_productoOrigen != null) const SizedBox(height: 24),
-
-                    // DESTINO
-                    if (_productoOrigen != null)
+                    if (_productoOrigen != null && _fabricanteSeleccionado != null)
                       _buildSeccion(
                         titulo: 'PRODUCTO DESTINO',
                         subtitulo: 'El stock se va a sumar acá',
@@ -260,16 +294,33 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
                         }),
                       ),
 
-                    if (_productoOrigen != null && _productoDestino != null) ...[
+                    if (_productoOrigen != null &&
+                        _productoDestino != null &&
+                        _fabricanteSeleccionado != null) ...[
                       const SizedBox(height: 24),
-                      const Text(
-                        'CANTIDAD A TRANSFERIR',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
-                        ),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'CANTIDAD A TRANSFERIR',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _cantidadController.text =
+                                  (_fabricantesOrigen[_fabricanteSeleccionado] ??
+                                          0)
+                                      .toString();
+                            }),
+                            child: const Text('MIGRAR TODO'),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       TextField(
@@ -277,7 +328,8 @@ class _TransferirStockScreenState extends State<TransferirStockScreen> {
                         controller: _cantidadController,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          hintText: 'Ej: 1000',
+                          hintText:
+                              'Máx: ${_fabricantesOrigen[_fabricanteSeleccionado] ?? 0}',
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
