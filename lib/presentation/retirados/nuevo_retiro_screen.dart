@@ -24,13 +24,9 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
   bool _guardando = false;
   String _error = '';
 
-  // ─────────────────────────────────────────────────────────
-  // AVISO DE "DESTINAR" — SOLO VISUAL
-  // No participa de ninguna validación ni del registro del retiro.
-  // Se lee de destinar_local_db.dart (base local aparte, sin relación
-  // con data_master.dart ni con el stock real).
-  // Mapa: destino -> cantidad total apartada para ese destino.
-  // ─────────────────────────────────────────────────────────
+  Map<String, int> _fabricantesDisponibles = {};
+  String? _fabricanteSeleccionado;
+
   Map<String, int> _apartadosPorDestino = {};
 
   @override
@@ -47,6 +43,8 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
       _buscado = false;
       _productoSeleccionado = null;
       _apartadosPorDestino = {};
+      _fabricantesDisponibles = {};
+      _fabricanteSeleccionado = null;
     });
 
     List<Map<String, dynamic>> docs = await DataMaster().obtenerProductos();
@@ -80,11 +78,19 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
       _cantidadController.clear();
       _error = '';
       _apartadosPorDestino = {};
+      _fabricantesDisponibles = {};
+      _fabricanteSeleccionado = null;
     });
 
-    // Lectura pura, no bloqueante para el flujo: si falla, simplemente
-    // no se muestra el aviso, pero el retiro sigue funcionando igual.
     await _cargarApartados(data);
+    await _cargarFabricantes(data);
+  }
+
+  Future<void> _cargarFabricantes(Map<String, dynamic> data) async {
+    final fab = await DataMaster()
+        .obtenerStockPorFabricante(data['id'].toString());
+    if (!mounted) return;
+    setState(() => _fabricantesDisponibles = fab);
   }
 
   Future<void> _cargarApartados(Map<String, dynamic> data) async {
@@ -98,18 +104,20 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         agrupado[a.destino] = (agrupado[a.destino] ?? 0) + a.cantidad;
       }
 
-      // Si el usuario ya cambió de producto mientras esto cargaba, no pisar.
       if (!mounted || _productoSeleccionado?['codigo'] != codigo) return;
 
       setState(() => _apartadosPorDestino = agrupado);
-    } catch (_) {
-      // Aviso puramente informativo: cualquier error se ignora en silencio.
-    }
+    } catch (_) {}
   }
 
   Future<void> _confirmar() async {
     final companero = _companeroController.text.trim();
     final cantidad = int.tryParse(_cantidadController.text.trim());
+
+    if (_fabricanteSeleccionado == null) {
+      setState(() => _error = 'Seleccioná de qué fabricante se retira');
+      return;
+    }
 
     if (cantidad == null || cantidad <= 0) {
       setState(() => _error = 'Ingresa la cantidad a retirar');
@@ -117,11 +125,11 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     }
 
     final data = _productoSeleccionado!;
-    final stockDisponible = (data['stockActual'] as num?)?.toInt() ?? 0;
+    final stockFab = _fabricantesDisponibles[_fabricanteSeleccionado] ?? 0;
 
-    if (cantidad > stockDisponible) {
-      setState(() =>
-          _error = 'Stock insuficiente. Disponible: $stockDisponible');
+    if (cantidad > stockFab) {
+      setState(() => _error =
+          'Stock insuficiente de $_fabricanteSeleccionado. Disponible: $stockFab');
       return;
     }
 
@@ -131,13 +139,9 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
     });
 
     try {
-      final combinaciones = await DataMaster()
-          .obtenerCombinacionesRecepcion(data['id'].toString());
-
-      final recepcionIds = combinaciones
-          .expand(
-              (c) => List<String>.from(c['recepcionIds'] as List? ?? []))
-          .toList();
+      final recepcionIds = await DataMaster()
+          .obtenerRecepcionIdsPorFabricante(
+              data['id'].toString(), _fabricanteSeleccionado!);
 
       final ok = await DataMaster().registrarRetiro(
         productoId: data['id']?.toString() ?? '',
@@ -381,23 +385,46 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
                 onPressed: () => setState(() {
                   _productoSeleccionado = null;
                   _apartadosPorDestino = {};
+                  _fabricantesDisponibles = {};
+                  _fabricanteSeleccionado = null;
                 }),
               ),
             ],
           ),
         ),
 
-        // ─────────────────────────────────────────────────────
-        // AVISO "DESTINAR" — solo aparece si hay apartados para
-        // este código. No bloquea nada, no valida nada, no toca
-        // stock. Al estar dentro del Column normal, empuja el
-        // resto del formulario hacia abajo automáticamente.
-        // ─────────────────────────────────────────────────────
         if (_apartadosPorDestino.isNotEmpty) _buildAvisoApartados(),
 
         const SizedBox(height: 24),
 
-        _buildLabel('COMPAÑERO (opcional)'),
+        _buildLabel('FABRICANTE'),
+        const SizedBox(height: 8),
+        if (_fabricantesDisponibles.isEmpty)
+          const Text(
+            'No hay fabricantes cargados para este producto',
+            style: TextStyle(color: Colors.deepOrange, fontSize: 13),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            children: _fabricantesDisponibles.entries.map((e) {
+              final seleccionado = _fabricanteSeleccionado == e.key;
+              return ChoiceChip(
+                label: Text('${e.key}: ${e.value}'),
+                selected: seleccionado,
+                selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                onSelected: (_) => setState(() {
+                  _fabricanteSeleccionado = e.key;
+                  _cantidadController.clear();
+                  _error = '';
+                }),
+              );
+            }).toList(),
+          ),
+
+        const SizedBox(height: 20),
+
+        _buildLabel('RETIRADO POR (opcional)'),
         const SizedBox(height: 8),
         _buildTextField(
           controller: _companeroController,
@@ -410,7 +437,9 @@ class _NuevoRetiroScreenState extends State<NuevoRetiroScreen> {
         const SizedBox(height: 8),
         _buildTextField(
           controller: _cantidadController,
-          hint: 'Ej: 1000',
+          hint: _fabricanteSeleccionado == null
+              ? 'Elegí primero un fabricante'
+              : 'Máx: ${_fabricantesDisponibles[_fabricanteSeleccionado] ?? 0}',
           teclado: TextInputType.number,
         ),
         const SizedBox(height: 32),
